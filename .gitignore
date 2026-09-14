@@ -1,0 +1,14 @@
+# Installed skill content — local tooling config, not project code.
+.agents/skills/
+.claude/skills/
+skills-lock.json
+
+# Machine-local Claude Code settings (not shared with the team)
+.claude/settings.local.json
+
+# OS cruft
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+.scratch/
