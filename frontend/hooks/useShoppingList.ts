@@ -2,16 +2,13 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import {
-  addExcludedIngredient,
-  addExcludedStore,
   addItem,
-  addPreferredBrand,
+  addPreference,
   AddItemInput,
   createEmptyState,
-  removeExcludedIngredient,
-  removeExcludedStore,
+  PreferenceKind,
   removeItem,
-  removePreferredBrand,
+  removePreference,
   setCategory,
   setQuantity,
   ShoppingListState,
@@ -75,28 +72,12 @@ export function useShoppingList() {
       (id: string, category: string | null) => update((s) => setCategory(s, id, category)),
       [update]
     ),
-    addPreferredBrand: useCallback(
-      (brand: string) => update((s) => addPreferredBrand(s, brand)),
+    addPreference: useCallback(
+      (kind: PreferenceKind, value: string) => update((s) => addPreference(s, kind, value)),
       [update]
     ),
-    removePreferredBrand: useCallback(
-      (brand: string) => update((s) => removePreferredBrand(s, brand)),
-      [update]
-    ),
-    addExcludedIngredient: useCallback(
-      (ingredient: string) => update((s) => addExcludedIngredient(s, ingredient)),
-      [update]
-    ),
-    removeExcludedIngredient: useCallback(
-      (ingredient: string) => update((s) => removeExcludedIngredient(s, ingredient)),
-      [update]
-    ),
-    addExcludedStore: useCallback(
-      (store: string) => update((s) => addExcludedStore(s, store)),
-      [update]
-    ),
-    removeExcludedStore: useCallback(
-      (store: string) => update((s) => removeExcludedStore(s, store)),
+    removePreference: useCallback(
+      (kind: PreferenceKind, value: string) => update((s) => removePreference(s, kind, value)),
       [update]
     ),
   };

@@ -5,7 +5,7 @@ import { useShoppingList } from "@/hooks/useShoppingList";
 import { ShoppingListItem } from "@/lib/shoppingList";
 import styles from "./ShoppingList.module.css";
 
-export type ShoppingList = ReturnType<typeof useShoppingList>;
+export type ShoppingListController = ReturnType<typeof useShoppingList>;
 
 function groupByCategory(items: ShoppingListItem[]) {
   const groups = new Map<string, ShoppingListItem[]>();
@@ -68,7 +68,7 @@ function TagList({
   );
 }
 
-export function ShoppingListView({ list }: { list: ShoppingList }) {
+export function ShoppingListView({ list }: { list: ShoppingListController }) {
   const [nameInput, setNameInput] = useState("");
 
   function handleAddByName(event: FormEvent) {
@@ -149,20 +149,20 @@ export function ShoppingListView({ list }: { list: ShoppingList }) {
       <TagList
         label="Bevorzugte Marken"
         values={list.preferences.preferredBrands}
-        onAdd={list.addPreferredBrand}
-        onRemove={list.removePreferredBrand}
+        onAdd={(value) => list.addPreference("preferredBrands", value)}
+        onRemove={(value) => list.removePreference("preferredBrands", value)}
       />
       <TagList
         label="Ausgeschlossene Zutaten"
         values={list.preferences.excludedIngredients}
-        onAdd={list.addExcludedIngredient}
-        onRemove={list.removeExcludedIngredient}
+        onAdd={(value) => list.addPreference("excludedIngredients", value)}
+        onRemove={(value) => list.removePreference("excludedIngredients", value)}
       />
       <TagList
         label="Ausgeschlossene Läden"
         values={list.preferences.excludedStores}
-        onAdd={list.addExcludedStore}
-        onRemove={list.removeExcludedStore}
+        onAdd={(value) => list.addPreference("excludedStores", value)}
+        onRemove={(value) => list.removePreference("excludedStores", value)}
       />
     </section>
   );

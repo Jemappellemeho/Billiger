@@ -1,14 +1,10 @@
 import { describe, expect, test } from "vitest";
 import {
-  addExcludedIngredient,
-  addExcludedStore,
   addItem,
-  addPreferredBrand,
+  addPreference,
   createEmptyState,
-  removeExcludedIngredient,
-  removeExcludedStore,
   removeItem,
-  removePreferredBrand,
+  removePreference,
   setCategory,
   setQuantity,
   toggleFavorite,
@@ -123,29 +119,36 @@ describe("setCategory", () => {
 
 describe("preferences", () => {
   test("adds and removes a preferred brand without duplicates", () => {
-    let state = addPreferredBrand(createEmptyState(), "NÖM");
-    state = addPreferredBrand(state, "NÖM");
+    let state = addPreference(createEmptyState(), "preferredBrands", "NÖM");
+    state = addPreference(state, "preferredBrands", "NÖM");
     expect(state.preferences.preferredBrands).toEqual(["NÖM"]);
 
-    state = removePreferredBrand(state, "NÖM");
+    state = removePreference(state, "preferredBrands", "NÖM");
     expect(state.preferences.preferredBrands).toEqual([]);
   });
 
   test("adds and removes an excluded ingredient without duplicates", () => {
-    let state = addExcludedIngredient(createEmptyState(), "Laktose");
-    state = addExcludedIngredient(state, "Laktose");
+    let state = addPreference(createEmptyState(), "excludedIngredients", "Laktose");
+    state = addPreference(state, "excludedIngredients", "Laktose");
     expect(state.preferences.excludedIngredients).toEqual(["Laktose"]);
 
-    state = removeExcludedIngredient(state, "Laktose");
+    state = removePreference(state, "excludedIngredients", "Laktose");
     expect(state.preferences.excludedIngredients).toEqual([]);
   });
 
   test("adds and removes an excluded store without duplicates", () => {
-    let state = addExcludedStore(createEmptyState(), "Hofer");
-    state = addExcludedStore(state, "Hofer");
+    let state = addPreference(createEmptyState(), "excludedStores", "Hofer");
+    state = addPreference(state, "excludedStores", "Hofer");
     expect(state.preferences.excludedStores).toEqual(["Hofer"]);
 
-    state = removeExcludedStore(state, "Hofer");
+    state = removePreference(state, "excludedStores", "Hofer");
     expect(state.preferences.excludedStores).toEqual([]);
+  });
+
+  test("preference kinds are independent of one another", () => {
+    let state = addPreference(createEmptyState(), "preferredBrands", "NÖM");
+    state = addPreference(state, "excludedStores", "NÖM");
+    expect(state.preferences.preferredBrands).toEqual(["NÖM"]);
+    expect(state.preferences.excludedStores).toEqual(["NÖM"]);
   });
 });

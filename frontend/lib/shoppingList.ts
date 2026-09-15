@@ -101,76 +101,28 @@ export function setCategory(
   };
 }
 
-function addPreference(list: string[], value: string): string[] {
-  return list.includes(value) ? list : [...list, value];
-}
+export type PreferenceKind = keyof Preferences;
 
-function removePreference(list: string[], value: string): string[] {
-  return list.filter((entry) => entry !== value);
-}
-
-export function addPreferredBrand(state: ShoppingListState, brand: string): ShoppingListState {
-  return {
-    ...state,
-    preferences: {
-      ...state.preferences,
-      preferredBrands: addPreference(state.preferences.preferredBrands, brand),
-    },
-  };
-}
-
-export function removePreferredBrand(state: ShoppingListState, brand: string): ShoppingListState {
-  return {
-    ...state,
-    preferences: {
-      ...state.preferences,
-      preferredBrands: removePreference(state.preferences.preferredBrands, brand),
-    },
-  };
-}
-
-export function addExcludedIngredient(
+export function addPreference(
   state: ShoppingListState,
-  ingredient: string
+  kind: PreferenceKind,
+  value: string
+): ShoppingListState {
+  const list = state.preferences[kind];
+  if (list.includes(value)) return state;
+  return { ...state, preferences: { ...state.preferences, [kind]: [...list, value] } };
+}
+
+export function removePreference(
+  state: ShoppingListState,
+  kind: PreferenceKind,
+  value: string
 ): ShoppingListState {
   return {
     ...state,
     preferences: {
       ...state.preferences,
-      excludedIngredients: addPreference(state.preferences.excludedIngredients, ingredient),
-    },
-  };
-}
-
-export function removeExcludedIngredient(
-  state: ShoppingListState,
-  ingredient: string
-): ShoppingListState {
-  return {
-    ...state,
-    preferences: {
-      ...state.preferences,
-      excludedIngredients: removePreference(state.preferences.excludedIngredients, ingredient),
-    },
-  };
-}
-
-export function addExcludedStore(state: ShoppingListState, store: string): ShoppingListState {
-  return {
-    ...state,
-    preferences: {
-      ...state.preferences,
-      excludedStores: addPreference(state.preferences.excludedStores, store),
-    },
-  };
-}
-
-export function removeExcludedStore(state: ShoppingListState, store: string): ShoppingListState {
-  return {
-    ...state,
-    preferences: {
-      ...state.preferences,
-      excludedStores: removePreference(state.preferences.excludedStores, store),
+      [kind]: state.preferences[kind].filter((entry) => entry !== value),
     },
   };
 }
