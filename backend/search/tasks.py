@@ -10,14 +10,21 @@ warning (see .scratch/billiger/research/01-marktguru-api-produktdaten.md).
 A failure fetching one anchor is logged and skipped rather than raised, so a
 single broken anchor does not crash the whole run, and that anchor's last
 successfully cached snapshot stays in place and usable.
+
+Scope note: this task only populates AnchorOfferSnapshot. Reading it back
+(e.g. serving cached anchor data from ProductSearchView on a live Marktguru
+outage) is left for whichever future ticket asks for it, to avoid changing
+the search endpoint's tested on-demand contract here. It also queries a
+single representative Vienna postcode per anchor rather than iterating every
+Marktguru-covered postcode in Wien, matching how Ticket 08's own search
+endpoint already resolves one zip code per request.
 """
 import logging
 
 from celery import shared_task
-from django.conf import settings
 
 from search.anchor_products import ANCHOR_PRODUCTS, anchor_id_for_offer_group, apply_anchor_overrides
-from search.marktguru_client import MarktguruClient
+from search.marktguru_client import client_from_django_settings
 from search.matching import group_offers
 from search.models import AnchorOfferSnapshot
 
@@ -30,7 +37,7 @@ VIENNA_ZIP_CODE = "1010"
 
 @shared_task
 def refresh_offers():
-    client = _marktguru_client()
+    client = client_from_django_settings()
     refreshed = 0
     failed = 0
 
@@ -38,12 +45,12 @@ def refresh_offers():
         query = anchor["name_aliases"][0]
         try:
             raw_offers = client.search(query, zip_code=VIENNA_ZIP_CODE)
-            groups = apply_anchor_overrides(group_offers(raw_offers))
         except Exception:
             logger.exception("Weekly offer refresh failed for anchor '%s'", anchor["id"])
             failed += 1
             continue
 
+        groups = apply_anchor_overrides(group_offers(raw_offers))
         matched_group = next(
             (g for g in groups if anchor_id_for_offer_group(g) == anchor["id"]), None
         )
@@ -56,10 +63,3 @@ def refresh_offers():
         refreshed += 1
 
     return {"refreshed": refreshed, "failed": failed}
-
-
-def _marktguru_client():
-    return MarktguruClient(
-        api_key=getattr(settings, "MARKTGURU_API_KEY", None),
-        client_key=getattr(settings, "MARKTGURU_CLIENT_KEY", None),
-    )

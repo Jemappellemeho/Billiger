@@ -47,7 +47,8 @@ def _alias_matches(value, aliases):
     return False
 
 
-def _anchor_for_group(group, anchors):
+def anchor_id_for_offer_group(group, anchors=ANCHOR_PRODUCTS):
+    """Which anchor, if any, a matched offer group corresponds to."""
     brand = normalize_text(group.get("brand"))
     name = normalize_text(group.get("name"))
     quantity = group.get("normalized_quantity")
@@ -72,18 +73,12 @@ def _merge(groups):
     }
 
 
-def anchor_id_for_offer_group(group, anchors=ANCHOR_PRODUCTS):
-    """Public entry point for callers outside this module (e.g. search.tasks)
-    that need to know which anchor, if any, a matched offer group is."""
-    return _anchor_for_group(group, anchors)
-
-
 def apply_anchor_overrides(groups, anchors=ANCHOR_PRODUCTS):
     """Merge fuzzy-matched groups that the anchor table says are the same product."""
     by_anchor = {}
     passthrough = []
     for group in groups:
-        anchor_id = _anchor_for_group(group, anchors)
+        anchor_id = anchor_id_for_offer_group(group, anchors)
         if anchor_id is None:
             passthrough.append(group)
         else:
