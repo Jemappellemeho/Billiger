@@ -2,7 +2,9 @@
 
 import { FormEvent, useState } from "react";
 import { useLocation } from "@/hooks/useLocation";
+import { useShoppingList } from "@/hooks/useShoppingList";
 import { ProductGroup, SearchError, searchProducts } from "@/lib/api";
+import { ShoppingListView } from "./ShoppingList";
 import styles from "./page.module.css";
 
 function formatQuantity(quantity: ProductGroup["normalized_quantity"]) {
@@ -22,6 +24,7 @@ function formatPrice(price: number) {
 
 export default function Home() {
   const { location, setManualZipCode } = useLocation();
+  const shoppingList = useShoppingList();
   const [query, setQuery] = useState("");
   const [zipCodeInput, setZipCodeInput] = useState("");
   const [results, setResults] = useState<ProductGroup[] | null>(null);
@@ -144,11 +147,25 @@ export default function Home() {
                     </li>
                   ))}
               </ul>
+              <button
+                type="button"
+                onClick={() =>
+                  shoppingList.addItem({
+                    name: group.name ?? group.brand ?? "Unbenanntes Produkt",
+                    brand: group.brand,
+                    category: group.categories[0] ?? null,
+                  })
+                }
+              >
+                Zur Liste hinzufügen
+              </button>
             </article>
             );
           })}
         </section>
       )}
+
+      <ShoppingListView list={shoppingList} />
     </main>
   );
 }
