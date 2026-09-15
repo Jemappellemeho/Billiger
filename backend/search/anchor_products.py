@@ -72,6 +72,12 @@ def _merge(groups):
     }
 
 
+def anchor_id_for_offer_group(group, anchors=ANCHOR_PRODUCTS):
+    """Public entry point for callers outside this module (e.g. search.tasks)
+    that need to know which anchor, if any, a matched offer group is."""
+    return _anchor_for_group(group, anchors)
+
+
 def apply_anchor_overrides(groups, anchors=ANCHOR_PRODUCTS):
     """Merge fuzzy-matched groups that the anchor table says are the same product."""
     by_anchor = {}
