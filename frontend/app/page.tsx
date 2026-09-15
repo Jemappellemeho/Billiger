@@ -3,7 +3,15 @@
 import { FormEvent, useState } from "react";
 import { useLocation } from "@/hooks/useLocation";
 import { useShoppingList } from "@/hooks/useShoppingList";
-import { ProductGroup, SearchError, searchProducts } from "@/lib/api";
+import {
+  CartComparisonError,
+  CartComparisonResponse,
+  ProductGroup,
+  SearchError,
+  compareCart,
+  searchProducts,
+} from "@/lib/api";
+import { CartComparisonView } from "./CartComparison";
 import { ShoppingListView } from "./ShoppingList";
 import styles from "./page.module.css";
 
@@ -22,6 +30,12 @@ function formatPrice(price: number) {
   return price.toLocaleString("de-AT", { style: "currency", currency: "EUR" });
 }
 
+function resolveSearchLocation(location: ReturnType<typeof useLocation>["location"]) {
+  if (location.status === "gps") return { lat: location.lat, lon: location.lon };
+  if (location.status === "manual") return { zipCode: location.zipCode };
+  return null;
+}
+
 export default function Home() {
   const { location, setManualZipCode } = useLocation();
   const shoppingList = useShoppingList();
@@ -31,6 +45,9 @@ export default function Home() {
   const [resolvedZipCode, setResolvedZipCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [comparison, setComparison] = useState<CartComparisonResponse | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [comparing, setComparing] = useState(false);
 
   const needsManualZipCode = location.status === "unresolved";
 
@@ -40,12 +57,7 @@ export default function Home() {
 
     if (!query.trim()) return;
 
-    const searchLocation =
-      location.status === "gps"
-        ? { lat: location.lat, lon: location.lon }
-        : location.status === "manual"
-          ? { zipCode: location.zipCode }
-          : null;
+    const searchLocation = resolveSearchLocation(location);
 
     if (!searchLocation) {
       setError("Bitte gib eine Postleitzahl an, damit wir Läden in deiner Nähe finden können.");
@@ -62,6 +74,39 @@ export default function Home() {
       setError(err instanceof SearchError ? err.message : "Etwas ist schiefgelaufen.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCompare() {
+    setComparisonError(null);
+
+    const searchLocation = resolveSearchLocation(location);
+    if (!searchLocation) {
+      setComparisonError(
+        "Bitte gib eine Postleitzahl an, damit wir Läden in deiner Nähe finden können."
+      );
+      return;
+    }
+    if (shoppingList.items.length === 0) return;
+
+    setComparing(true);
+    try {
+      const response = await compareCart(
+        shoppingList.items.map((item) => ({
+          name: item.name,
+          brand: item.brand,
+          quantity: item.quantity,
+        })),
+        searchLocation
+      );
+      setComparison(response);
+    } catch (err) {
+      setComparison(null);
+      setComparisonError(
+        err instanceof CartComparisonError ? err.message : "Etwas ist schiefgelaufen."
+      );
+    } finally {
+      setComparing(false);
     }
   }
 
@@ -166,6 +211,16 @@ export default function Home() {
       )}
 
       <ShoppingListView list={shoppingList} />
+
+      {shoppingList.items.length > 0 && (
+        <section className={styles.results}>
+          <button type="button" onClick={handleCompare} disabled={comparing}>
+            {comparing ? "Vergleiche …" : "Warenkorb vergleichen"}
+          </button>
+          {comparisonError && <p className={styles.error}>{comparisonError}</p>}
+          {comparison && <CartComparisonView result={comparison} />}
+        </section>
+      )}
     </main>
   );
 }
