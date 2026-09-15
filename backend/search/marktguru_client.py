@@ -13,6 +13,7 @@ import re
 from html.parser import HTMLParser
 
 import requests
+from django.conf import settings
 
 
 class CredentialsUnavailable(Exception):
@@ -120,3 +121,10 @@ class MarktguruClient:
             "Could not find apiKey/clientKey in the marktguru.at homepage — "
             "the site markup may have changed."
         )
+
+
+def client_from_django_settings():
+    return MarktguruClient(
+        api_key=getattr(settings, "MARKTGURU_API_KEY", None),
+        client_key=getattr(settings, "MARKTGURU_CLIENT_KEY", None),
+    )

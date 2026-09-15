@@ -47,7 +47,8 @@ def _alias_matches(value, aliases):
     return False
 
 
-def _anchor_for_group(group, anchors):
+def anchor_id_for_offer_group(group, anchors=ANCHOR_PRODUCTS):
+    """Which anchor, if any, a matched offer group corresponds to."""
     brand = normalize_text(group.get("brand"))
     name = normalize_text(group.get("name"))
     quantity = group.get("normalized_quantity")
@@ -77,7 +78,7 @@ def apply_anchor_overrides(groups, anchors=ANCHOR_PRODUCTS):
     by_anchor = {}
     passthrough = []
     for group in groups:
-        anchor_id = _anchor_for_group(group, anchors)
+        anchor_id = anchor_id_for_offer_group(group, anchors)
         if anchor_id is None:
             passthrough.append(group)
         else:
