@@ -1,0 +1,154 @@
+.section {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.row input {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.row button {
+  padding: 10px 16px;
+  font-size: 16px;
+  border: none;
+  border-radius: 6px;
+  background: #171717;
+  color: #fff;
+  cursor: pointer;
+}
+
+.empty {
+  color: #666;
+}
+
+.categoryGroup h3 {
+  font-size: 15px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.itemList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.favoriteButton {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.itemName {
+  flex: 1;
+}
+
+.quantityInput {
+  width: 56px;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.categoryInput {
+  width: 110px;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.preferencesHeading {
+  margin-top: 8px;
+}
+
+.preferenceGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preferenceLabel {
+  font-size: 14px;
+  color: #666;
+}
+
+.tagList {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #e5e5e5;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 14px;
+}
+
+.tag button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: #666;
+}
+
+@media (prefers-color-scheme: dark) {
+  .empty,
+  .categoryGroup h3,
+  .preferenceLabel {
+    color: #999;
+  }
+
+  .row input,
+  .quantityInput,
+  .categoryInput {
+    background: #111;
+    color: #ededed;
+    border-color: #333;
+  }
+
+  .row button {
+    background: #ededed;
+    color: #111;
+  }
+
+  .item,
+  .tag {
+    border-color: #333;
+  }
+
+  .tag button {
+    color: #ccc;
+  }
+}
