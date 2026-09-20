@@ -11,6 +11,9 @@ from search.marktguru_client import client_from_django_settings
 from search.matching import group_offers
 
 
+MARKTGURU_UNAVAILABLE = "Marktguru ist derzeit nicht erreichbar."
+
+
 def resolve_zip_code(source):
     """`source` is anything with a dict-like .get (query_params for GET, request.data for POST)."""
     zip_code_param = source.get("zip_code")

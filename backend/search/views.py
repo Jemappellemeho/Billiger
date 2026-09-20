@@ -31,9 +31,7 @@ class ProductSearchView(APIView):
         try:
             groups = services.search_products(query, zip_code)
         except Exception:
-            return Response(
-                {"detail": "Marktguru ist derzeit nicht erreichbar."}, status=502
-            )
+            return Response({"detail": services.MARKTGURU_UNAVAILABLE}, status=502)
 
         return Response({"query": query, "zip_code": zip_code, "results": groups})
 
@@ -65,9 +63,7 @@ class CartComparisonView(APIView):
         try:
             comparison = services.compare_items(items, zip_code)
         except Exception:
-            return Response(
-                {"detail": "Marktguru ist derzeit nicht erreichbar."}, status=502
-            )
+            return Response({"detail": services.MARKTGURU_UNAVAILABLE}, status=502)
 
         if request.user.is_authenticated:
             try:

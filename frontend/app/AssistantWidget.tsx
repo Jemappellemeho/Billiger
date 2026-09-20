@@ -41,8 +41,10 @@ export function AssistantWidget({
   const input = useRef<HTMLInputElement>(null);
   const end = useRef<HTMLDivElement>(null);
 
-  // Another account (or none) must never see the previous conversation.
+  // Another account (or none) must never see the previous conversation, nor receive what is
+  // still being said into the microphone.
   useEffect(() => {
+    microphone.current?.cancel();
     reset();
   }, [token, reset]);
 
@@ -51,7 +53,7 @@ export function AssistantWidget({
   }, [open]);
 
   useEffect(() => {
-    end.current?.scrollIntoView?.({ block: "end" });
+    end.current?.scrollIntoView({ block: "end" });
   }, [messages, pending, open]);
 
   // Nothing keeps listening once the panel is closed or gone.
@@ -77,16 +79,19 @@ export function AssistantWidget({
       return;
     }
     setVoiceError(null);
-    const controls = startSpeechInput({
+    let session: Listening | null = null;
+    session = startSpeechInput({
       onTranscript: (transcript) => submit(transcript, true),
       onError: setVoiceError,
       onEnd: () => {
+        // A cancelled session can end after a newer one has started; only the current one may reset.
+        if (microphone.current !== session) return;
         microphone.current = null;
         setListening(false);
       },
     });
-    if (controls) {
-      microphone.current = controls;
+    if (session) {
+      microphone.current = session;
       setListening(true);
     } else {
       setVoiceError("Spracheingabe wird von diesem Browser nicht unterstützt.");

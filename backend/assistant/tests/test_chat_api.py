@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from accounts.tests.base import AccountsAPITestCase
 from accounts.tests.helpers import LIST_URL, auth, item, shopping_list
@@ -156,8 +157,9 @@ def _marktguru_down(url, params=None, headers=None, timeout=None):
 
 
 class ProductPriceActionTests(AccountsAPITestCase):
-    def _ask(self, token, *, query="Milch", marktguru=_fake_session_get, **location):
-        turns = (call_tool("search_product_prices", {"query": query}), say("Am billigsten bei Lidl."))
+    def _ask(self, token, *, query="Milch", tool_zip_code=None, marktguru=_fake_session_get, **location):
+        tool_input = {"query": query, **({"zip_code": tool_zip_code} if tool_zip_code else {})}
+        turns = (call_tool("search_product_prices", tool_input), say("Am billigsten bei Lidl."))
         with assistant_llm(*turns, marktguru=marktguru) as llm:
             response = chat(self.client, token, "Wo ist Milch am billigsten?", **location)
         self.assertEqual(response.status_code, 200)
@@ -223,6 +225,29 @@ class ProductPriceActionTests(AccountsAPITestCase):
         self.assertIn("Marktguru", result["content"]["error"])
         self.assertEqual(body["reply"], "Am billigsten bei Lidl.")
 
+    def test_a_plz_the_user_names_in_the_chat_is_enough_when_no_location_is_known(self):
+        token = sign_up(self.client)
+
+        llm, _ = self._ask(token, tool_zip_code="1010")
+
+        self.assertEqual(llm.tool_results(1)[0]["content"]["zip_code"], "1010")
+
+    def test_a_plz_named_in_the_chat_wins_over_the_apps_location(self):
+        token = sign_up(self.client)
+
+        llm, _ = self._ask(token, zip_code="1010", tool_zip_code="1020")
+
+        self.assertEqual(llm.tool_results(1)[0]["content"]["zip_code"], "1020")
+
+    def test_an_invalid_plz_named_in_the_chat_is_reported_to_the_model(self):
+        token = sign_up(self.client)
+
+        llm, _ = self._ask(token, zip_code="1010", tool_zip_code="Graz")
+
+        [result] = llm.tool_results(1)
+        self.assertTrue(result["is_error"])
+        self.assertIn("Graz", result["content"]["error"])
+
     def test_a_blank_query_is_an_error_for_the_model(self):
         token = sign_up(self.client)
 
@@ -248,8 +273,9 @@ class CartComparisonActionTests(AccountsAPITestCase):
     def _save_list(self, *items):
         self.client.put(LIST_URL, shopping_list(items), format="json", **auth(self.token))
 
-    def _ask(self, marktguru=_fake_session_get, **location):
-        turns = (call_tool("compare_shopping_list"), say("Bei Hofer bist du am günstigsten."))
+    def _ask(self, marktguru=_fake_session_get, tool_zip_code=None, **location):
+        tool_input = {"zip_code": tool_zip_code} if tool_zip_code else {}
+        turns = (call_tool("compare_shopping_list", tool_input), say("Bei Hofer bist du am günstigsten."))
         with assistant_llm(*turns, marktguru=marktguru) as llm:
             response = chat(self.client, self.token, "Vergleich meinen Warenkorb", **location)
         self.assertEqual(response.status_code, 200)
@@ -307,15 +333,35 @@ class CartComparisonActionTests(AccountsAPITestCase):
 
         llm, _ = self._ask(zip_code="1010")
 
-        self.assertIn("Regler", llm.tool_results(1)[0]["content"]["hinweis"])
+        self.assertIn("Regler", llm.tool_results(1)[0]["content"]["hint"])
 
-    def test_looking_at_the_comparison_does_not_count_toward_the_streak(self):
+    def test_a_comparison_in_the_chat_counts_toward_the_weekly_streak_like_in_the_app(self):
         self._save_list(item("Milch"), item("Nutella"))
 
         with clock(WEEK_1):
             self._ask(zip_code="1010")
 
-        self.assertEqual(streak_summary(self.client, self.token, moment=WEEK_1).json()["streak"]["weeks"], 0)
+        summary = streak_summary(self.client, self.token, moment=WEEK_1).json()
+        self.assertEqual(summary["streak"], {
+            "weeks": 1, "status": "active", "missed_weeks": 0, "last_completed_week": "2026-09-07",
+        })
+        self.assertEqual(summary["this_week"]["savings_vs_most_expensive"], 0.40)
+
+    def test_losing_the_streak_tick_does_not_cost_the_user_the_comparison(self):
+        self._save_list(item("Milch"))
+
+        with patch("assistant.tools.record_comparison", side_effect=RuntimeError("db down")):
+            llm, body = self._ask(zip_code="1010")
+
+        self.assertNotIn("is_error", llm.tool_results(1)[0])
+        self.assertEqual(body["reply"], "Bei Hofer bist du am günstigsten.")
+
+    def test_a_plz_named_in_the_chat_is_enough_when_no_location_is_known(self):
+        self._save_list(item("Milch"))
+
+        llm, _ = self._ask(tool_zip_code="1010")
+
+        self.assertEqual(llm.tool_results(1)[0]["content"]["zip_code"], "1010")
 
     def test_an_empty_list_has_nothing_to_compare(self):
         llm, _ = self._ask(zip_code="1010")

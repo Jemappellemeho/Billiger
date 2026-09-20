@@ -133,6 +133,23 @@ class ConversationTests(AccountsAPITestCase):
         self.assertTrue(result["is_error"])
         self.assertEqual(response.json()["reply"], "Das kann ich nicht.")
 
+    def test_an_unexpected_tool_failure_is_reported_to_the_model_not_as_a_server_error(self):
+        with patch("assistant.tools.shopping_list.load", side_effect=RuntimeError("db down")):
+            with assistant_llm(call_tool("get_shopping_list"), say("Da ging etwas schief.")) as llm:
+                response = chat(self.client, self.token)
+
+        self.assertEqual(response.status_code, 200)
+        [result] = llm.tool_results(1)
+        self.assertTrue(result["is_error"])
+        self.assertEqual(response.json()["reply"], "Da ging etwas schief.")
+
+    def test_an_empty_answer_from_the_model_still_gets_a_reply(self):
+        with assistant_llm(say("")):
+            response = chat(self.client, self.token)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["reply"].strip())
+
     def test_a_model_that_never_stops_calling_tools_is_cut_off(self):
         endless = [call_tool("get_shopping_list", call_id=f"toolu_{i}") for i in range(20)]
 

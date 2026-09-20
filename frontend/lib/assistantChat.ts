@@ -27,7 +27,6 @@ export const MAX_MESSAGE_LENGTH = 2000;
 const MAX_HISTORY_CONTENT_LENGTH = 4000;
 
 const UNREACHABLE = "Der Assistent ist gerade nicht erreichbar.";
-const NO_ANSWER = "Dazu habe ich gerade keine Antwort.";
 
 const emptyState: AssistantChatState = { messages: [], pending: false };
 
@@ -76,7 +75,7 @@ export function createAssistantChat({ api }: { api: AssistantApi }) {
     let reply: Omit<ChatMessage, "id">;
     try {
       const answer = await api.chat({ token, message, input, history, location });
-      reply = { role: "assistant", content: answer.reply.trim() || NO_ANSWER, input: "text", failed: false };
+      reply = { role: "assistant", content: answer.reply, input: "text", failed: false };
     } catch (error) {
       const content = error instanceof AssistantError ? error.message : UNREACHABLE;
       reply = { role: "assistant", content, input: "text", failed: true };
