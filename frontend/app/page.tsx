@@ -1,10 +1,21 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useAccount } from "@/hooks/useAccount";
 import { useLocation } from "@/hooks/useLocation";
 import { useShoppingList } from "@/hooks/useShoppingList";
-import { ProductGroup, SearchError, searchProducts } from "@/lib/api";
+import { useStreak } from "@/hooks/useStreak";
+import {
+  CartComparisonError,
+  CartComparisonResponse,
+  ProductGroup,
+  SearchError,
+  compareCart,
+  searchProducts,
+} from "@/lib/api";
 import { AccountPanel } from "./AccountPanel";
+import { CartComparisonView } from "./CartComparison";
+import { HomeHero } from "./HomeHero";
 import { ShoppingListView } from "./ShoppingList";
 import styles from "./page.module.css";
 
@@ -23,15 +34,26 @@ function formatPrice(price: number) {
   return price.toLocaleString("de-AT", { style: "currency", currency: "EUR" });
 }
 
+function resolveSearchLocation(location: ReturnType<typeof useLocation>["location"]) {
+  if (location.status === "gps") return { lat: location.lat, lon: location.lon };
+  if (location.status === "manual") return { zipCode: location.zipCode };
+  return null;
+}
+
 export default function Home() {
   const { location, setManualZipCode } = useLocation();
   const shoppingList = useShoppingList();
+  const { session } = useAccount();
+  const streak = useStreak(session?.token ?? null);
   const [query, setQuery] = useState("");
   const [zipCodeInput, setZipCodeInput] = useState("");
   const [results, setResults] = useState<ProductGroup[] | null>(null);
   const [resolvedZipCode, setResolvedZipCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [comparison, setComparison] = useState<CartComparisonResponse | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [comparing, setComparing] = useState(false);
 
   const needsManualZipCode = location.status === "unresolved";
 
@@ -41,12 +63,7 @@ export default function Home() {
 
     if (!query.trim()) return;
 
-    const searchLocation =
-      location.status === "gps"
-        ? { lat: location.lat, lon: location.lon }
-        : location.status === "manual"
-          ? { zipCode: location.zipCode }
-          : null;
+    const searchLocation = resolveSearchLocation(location);
 
     if (!searchLocation) {
       setError("Bitte gib eine Postleitzahl an, damit wir Läden in deiner Nähe finden können.");
@@ -66,6 +83,41 @@ export default function Home() {
     }
   }
 
+  async function handleCompare() {
+    setComparisonError(null);
+
+    const searchLocation = resolveSearchLocation(location);
+    if (!searchLocation) {
+      setComparisonError(
+        "Bitte gib eine Postleitzahl an, damit wir Läden in deiner Nähe finden können."
+      );
+      return;
+    }
+    if (shoppingList.items.length === 0) return;
+
+    setComparing(true);
+    try {
+      const response = await compareCart(
+        shoppingList.items.map((item) => ({
+          name: item.name,
+          brand: item.brand,
+          quantity: item.quantity,
+        })),
+        searchLocation,
+        session?.token
+      );
+      setComparison(response);
+      streak.refresh();
+    } catch (err) {
+      setComparison(null);
+      setComparisonError(
+        err instanceof CartComparisonError ? err.message : "Etwas ist schiefgelaufen."
+      );
+    } finally {
+      setComparing(false);
+    }
+  }
+
   function handleZipCodeSubmit(event: FormEvent) {
     event.preventDefault();
     if (zipCodeInput.trim()) {
@@ -79,6 +131,8 @@ export default function Home() {
       <p className={styles.subtitle}>Wo ist dein Produkt gerade am günstigsten?</p>
 
       <AccountPanel />
+
+      {streak.summary && <HomeHero summary={streak.summary} />}
 
       {location.status === "detecting" && <p>Standort wird ermittelt …</p>}
 
@@ -169,6 +223,16 @@ export default function Home() {
       )}
 
       <ShoppingListView list={shoppingList} />
+
+      {shoppingList.items.length > 0 && (
+        <section className={styles.results}>
+          <button type="button" onClick={handleCompare} disabled={comparing}>
+            {comparing ? "Vergleiche …" : "Warenkorb vergleichen"}
+          </button>
+          {comparisonError && <p className={styles.error}>{comparisonError}</p>}
+          {comparison && <CartComparisonView result={comparison} />}
+        </section>
+      )}
     </main>
   );
 }
