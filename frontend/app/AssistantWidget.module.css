@@ -1,0 +1,184 @@
+.launcher {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 50;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: #171717;
+  color: #fff;
+  font-size: 24px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.launcher:focus-visible,
+.close:focus-visible,
+.mic:focus-visible,
+.send:focus-visible,
+.suggestion:focus-visible {
+  outline: 2px solid #2f6fed;
+  outline-offset: 2px;
+}
+
+.panel {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 50;
+  width: min(380px, calc(100vw - 32px));
+  height: min(560px, calc(100vh - 32px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  border-radius: 16px;
+  background: var(--background);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.header h2 {
+  font-size: 16px;
+}
+
+.close {
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.messages {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  overflow-y: auto;
+}
+
+.hint {
+  font-size: 14px;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
+
+.suggestions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.suggestion {
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 20%, transparent);
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bubble {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 15px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.user {
+  align-self: flex-end;
+  background: #171717;
+  color: #fff;
+}
+
+.assistant {
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.failed {
+  align-self: flex-start;
+  background: #fdecea;
+  color: #8a1c13;
+}
+
+.typing {
+  opacity: 0.6;
+}
+
+.voiceLabel {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.voiceStatus {
+  padding: 0 16px 8px;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+}
+
+.composer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.composer input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.mic,
+.send {
+  padding: 10px 12px;
+  font-size: 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mic {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.micActive {
+  background: #d93025;
+}
+
+.send {
+  background: #171717;
+  color: #fff;
+}
+
+.send:disabled,
+.mic:disabled,
+.suggestion:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -14,6 +14,7 @@ import {
   searchProducts,
 } from "@/lib/api";
 import { AccountPanel } from "./AccountPanel";
+import { AssistantWidget } from "./AssistantWidget";
 import { CartComparisonView } from "./CartComparison";
 import { HomeHero } from "./HomeHero";
 import { ShoppingListView } from "./ShoppingList";
@@ -233,6 +234,8 @@ export default function Home() {
           {comparison && <CartComparisonView result={comparison} />}
         </section>
       )}
+
+      <AssistantWidget token={session?.token ?? null} location={resolveSearchLocation(location)} />
     </main>
   );
 }

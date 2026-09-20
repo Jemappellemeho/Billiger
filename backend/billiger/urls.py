@@ -22,4 +22,5 @@ urlpatterns = [
     path('api/', include('search.urls')),
     path('api/', include('accounts.urls')),
     path('api/', include('streaks.urls')),
+    path('api/', include('assistant.urls')),
 ]
