@@ -24,6 +24,18 @@ export type AddItemInput = {
   category?: string | null;
 };
 
+/**
+ * Limits the account storage accepts (mirrors backend/accounts/serializers.py).
+ * Guest state is kept within them so signing in can always migrate it.
+ */
+export const MAX_QUANTITY = 999;
+export const MAX_NAME_LENGTH = 200;
+export const MAX_BRAND_LENGTH = 100;
+export const MAX_CATEGORY_LENGTH = 100;
+export const MAX_ITEMS = 500;
+export const MAX_PREFERENCE_ENTRIES = 100;
+export const MAX_PREFERENCE_LENGTH = 100;
+
 export function createEmptyState(): ShoppingListState {
   return {
     items: [],
@@ -41,8 +53,9 @@ function itemId(name: string, brand: string | null | undefined) {
 }
 
 export function addItem(state: ShoppingListState, input: AddItemInput): ShoppingListState {
-  const brand = input.brand ?? null;
-  const id = itemId(input.name, brand);
+  const name = input.name.slice(0, MAX_NAME_LENGTH);
+  const brand = input.brand?.slice(0, MAX_BRAND_LENGTH) ?? null;
+  const id = itemId(name, brand);
   const existing = state.items.find((item) => item.id === id);
 
   if (existing) {
@@ -56,12 +69,13 @@ export function addItem(state: ShoppingListState, input: AddItemInput): Shopping
 
   const newItem: ShoppingListItem = {
     id,
-    name: input.name,
+    name,
     brand,
-    category: input.category ?? null,
+    category: input.category?.slice(0, MAX_CATEGORY_LENGTH) ?? null,
     favorite: false,
     quantity: 1,
   };
+  if (state.items.length >= MAX_ITEMS) return state;
   return { ...state, items: [...state.items, newItem] };
 }
 
@@ -74,7 +88,7 @@ export function setQuantity(
   id: string,
   quantity: number
 ): ShoppingListState {
-  const clamped = Math.max(1, Math.round(quantity));
+  const clamped = Math.min(MAX_QUANTITY, Math.max(1, Math.round(quantity)));
   return {
     ...state,
     items: state.items.map((item) => (item.id === id ? { ...item, quantity: clamped } : item)),
@@ -97,7 +111,9 @@ export function setCategory(
 ): ShoppingListState {
   return {
     ...state,
-    items: state.items.map((item) => (item.id === id ? { ...item, category } : item)),
+    items: state.items.map((item) =>
+      item.id === id ? { ...item, category: category?.slice(0, MAX_CATEGORY_LENGTH) ?? null } : item
+    ),
   };
 }
 
@@ -109,8 +125,9 @@ export function addPreference(
   value: string
 ): ShoppingListState {
   const list = state.preferences[kind];
-  if (list.includes(value)) return state;
-  return { ...state, preferences: { ...state.preferences, [kind]: [...list, value] } };
+  const entry = value.slice(0, MAX_PREFERENCE_LENGTH);
+  if (list.includes(entry) || list.length >= MAX_PREFERENCE_ENTRIES) return state;
+  return { ...state, preferences: { ...state.preferences, [kind]: [...list, entry] } };
 }
 
 export function removePreference(

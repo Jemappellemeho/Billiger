@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useLocation } from "@/hooks/useLocation";
 import { useShoppingList } from "@/hooks/useShoppingList";
 import { ProductGroup, SearchError, searchProducts } from "@/lib/api";
+import { AccountPanel } from "./AccountPanel";
 import { ShoppingListView } from "./ShoppingList";
 import styles from "./page.module.css";
 
@@ -76,6 +77,8 @@ export default function Home() {
     <main className={styles.page}>
       <h1>Billiger</h1>
       <p className={styles.subtitle}>Wo ist dein Produkt gerade am günstigsten?</p>
+
+      <AccountPanel />
 
       {location.status === "detecting" && <p>Standort wird ermittelt …</p>}
 

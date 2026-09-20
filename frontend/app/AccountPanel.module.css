@@ -1,0 +1,55 @@
+.panel {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hint {
+  color: #666;
+  font-size: 14px;
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.form input {
+  flex: 1 1 160px;
+  padding: 10px 12px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.panel button:not(.link) {
+  padding: 10px 16px;
+  font-size: 16px;
+  border: none;
+  border-radius: 6px;
+  background: #171717;
+  color: #fff;
+  cursor: pointer;
+}
+
+.panel button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.link {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #666;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.error {
+  color: #b3261e;
+}
