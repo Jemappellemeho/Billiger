@@ -21,7 +21,7 @@ export function AccountPanel() {
     void accountService.restore();
   }, []);
 
-  const attempt = useCallback(
+  const submitCredentials = useCallback(
     async (credentials: Parameters<typeof signIn>[0]) => {
       setError(null);
       setBusy(true);
@@ -38,13 +38,13 @@ export function AccountPanel() {
   );
 
   const handleGoogleCredential = useCallback(
-    (idToken: string) => void attempt({ kind: "google", idToken }),
-    [attempt]
+    (idToken: string) => void submitCredentials({ kind: "google", idToken }),
+    [submitCredentials]
   );
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    void attempt({ kind: mode, email: email.trim(), password });
+    void submitCredentials({ kind: mode, email: email.trim(), password });
   }
 
   if (session) {

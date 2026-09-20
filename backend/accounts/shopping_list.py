@@ -25,7 +25,7 @@ def save(user, data):
     return data
 
 
-def _union(first, second, limit):
+def _ordered_union(first, second, limit):
     return list(dict.fromkeys([*first, *second]))[:limit]
 
 
@@ -35,7 +35,9 @@ def merge(stored, guest):
     Nothing the account already has is lost or double-counted: stored rows
     stay first and in order, guest-only rows are appended, and rows present on
     both sides keep the larger quantity, so merging the same guest list a
-    second time is a no-op.
+    second time is a no-op. Only the storage caps (MAX_LIST_ITEMS,
+    MAX_PREFERENCE_ENTRIES) can drop entries; the frontend enforces the same
+    caps, so a merge only reaches them when two devices' lists add up.
     """
     items = [dict(entry) for entry in stored["items"]]
     by_id = {entry["id"]: entry for entry in items}
@@ -51,7 +53,7 @@ def merge(stored, guest):
             existing["category"] = existing["category"] or guest_item["category"]
 
     preferences = {
-        kind: _union(stored["preferences"][kind], guest["preferences"][kind], MAX_PREFERENCE_ENTRIES)
+        kind: _ordered_union(stored["preferences"][kind], guest["preferences"][kind], MAX_PREFERENCE_ENTRIES)
         for kind in stored["preferences"]
     }
     return {"items": items[:MAX_LIST_ITEMS], "preferences": preferences}

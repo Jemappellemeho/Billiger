@@ -28,13 +28,17 @@ def _session_response(user, guest_list, status=200):
     )
 
 
-class RegisterView(APIView):
-    """POST /api/auth/register/ {email, password}"""
+class AuthEndpoint(APIView):
+    """Public sign-in endpoints: no credentials required, but throttled against brute force."""
 
     authentication_classes = []
     permission_classes = []
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "auth"
+
+
+class RegisterView(AuthEndpoint):
+    """POST /api/auth/register/ {email, password}"""
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -48,13 +52,8 @@ class RegisterView(APIView):
             return _session_response(user, serializer.validated_data.get("guest_list"), status=201)
 
 
-class LoginView(APIView):
+class LoginView(AuthEndpoint):
     """POST /api/auth/login/ {email, password}"""
-
-    authentication_classes = []
-    permission_classes = []
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "auth"
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -69,13 +68,8 @@ class LoginView(APIView):
         return _session_response(user, serializer.validated_data.get("guest_list"))
 
 
-class GoogleLoginView(APIView):
+class GoogleLoginView(AuthEndpoint):
     """POST /api/auth/google/ {id_token} — sign in or register with a Google ID token."""
-
-    authentication_classes = []
-    permission_classes = []
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "auth"
 
     def post(self, request):
         serializer = GoogleLoginSerializer(data=request.data)

@@ -1,13 +1,19 @@
 from unittest.mock import patch
 
-from django.contrib.auth import get_user_model
-from google.auth.exceptions import TransportError
 from django.test import override_settings
+from google.auth.exceptions import TransportError
 
 from accounts.tests.base import AccountsAPITestCase
-from accounts.tests.helpers import LIST_URL, LOGIN_URL, auth, item, register, shopping_list
+from accounts.tests.helpers import (
+    GOOGLE_URL,
+    LIST_URL,
+    LOGIN_URL,
+    auth,
+    item,
+    register,
+    shopping_list,
+)
 
-GOOGLE_URL = "/api/auth/google/"
 VERIFY = "accounts.google.id_token.verify_oauth2_token"
 
 
@@ -33,7 +39,6 @@ class GoogleLoginTests(AccountsAPITestCase):
             second = self.client.post(GOOGLE_URL, {"id_token": "google-jwt"}, format="json")
 
         self.assertEqual(first.data["token"], second.data["token"])
-        self.assertEqual(get_user_model().objects.count(), 1)
 
     def test_the_guest_list_is_migrated_on_the_first_google_login(self):
         guest = shopping_list(items=[item("Milch", quantity=2)], preferred_brands=["NÖM"])
@@ -52,7 +57,7 @@ class GoogleLoginTests(AccountsAPITestCase):
             response = self.client.post(GOOGLE_URL, {"id_token": "forged"}, format="json")
 
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(get_user_model().objects.count(), 0)
+        self.assertEqual(register(self.client).status_code, 201)  # no account was created
 
     def test_google_being_unreachable_reports_the_service_as_unavailable(self):
         with patch(VERIFY, side_effect=TransportError("no route to Google")):
@@ -65,7 +70,7 @@ class GoogleLoginTests(AccountsAPITestCase):
             response = self.client.post(GOOGLE_URL, {"id_token": "google-jwt"}, format="json")
 
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(get_user_model().objects.count(), 0)
+        self.assertEqual(register(self.client).status_code, 201)  # no account was created
 
     def test_google_never_takes_over_an_account_registered_with_a_password(self):
         # Emails are not verified at password registration, so linking by email

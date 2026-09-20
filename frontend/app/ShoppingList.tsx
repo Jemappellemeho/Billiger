@@ -2,7 +2,13 @@
 
 import { FormEvent, useState } from "react";
 import { useShoppingList } from "@/hooks/useShoppingList";
-import { ShoppingListItem } from "@/lib/shoppingList";
+import {
+  MAX_CATEGORY_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_PREFERENCE_LENGTH,
+  MAX_QUANTITY,
+  ShoppingListItem,
+} from "@/lib/shoppingList";
 import styles from "./ShoppingList.module.css";
 
 export type ShoppingListController = ReturnType<typeof useShoppingList>;
@@ -44,6 +50,7 @@ function TagList({
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          maxLength={MAX_PREFERENCE_LENGTH}
           aria-label={label}
         />
         <button type="submit">Hinzufügen</button>
@@ -90,6 +97,7 @@ export function ShoppingListView({ list }: { list: ShoppingListController }) {
           placeholder="Artikel per Name hinzufügen"
           value={nameInput}
           onChange={(e) => setNameInput(e.target.value)}
+          maxLength={MAX_NAME_LENGTH}
           aria-label="Artikel per Name hinzufügen"
         />
         <button type="submit">Hinzufügen</button>
@@ -119,6 +127,7 @@ export function ShoppingListView({ list }: { list: ShoppingListController }) {
                 <input
                   type="number"
                   min={1}
+                  max={MAX_QUANTITY}
                   value={item.quantity}
                   aria-label={`Menge für ${item.name}`}
                   onChange={(e) => list.setQuantity(item.id, Number(e.target.value))}
@@ -127,6 +136,7 @@ export function ShoppingListView({ list }: { list: ShoppingListController }) {
                 <input
                   type="text"
                   placeholder="Kategorie"
+                  maxLength={MAX_CATEGORY_LENGTH}
                   defaultValue={item.category ?? ""}
                   aria-label={`Kategorie für ${item.name}`}
                   onBlur={(e) => list.setCategory(item.id, e.target.value.trim() || null)}

@@ -1,5 +1,7 @@
 REGISTER_URL = "/api/auth/register/"
 LOGIN_URL = "/api/auth/login/"
+LOGOUT_URL = "/api/auth/logout/"
+GOOGLE_URL = "/api/auth/google/"
 LIST_URL = "/api/shopping-list/"
 
 

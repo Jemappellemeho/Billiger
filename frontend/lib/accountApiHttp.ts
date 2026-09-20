@@ -83,19 +83,21 @@ function toAuthResult(response: AuthResponse): AuthResult {
   };
 }
 
+async function authenticate(path: string, body: object, guestList: ShoppingListState) {
+  const response = await request<AuthResponse>(path, {
+    method: "POST",
+    body: { ...body, guest_list: toWire(guestList) },
+  });
+  return toAuthResult(response);
+}
+
 export const httpAccountApi: AccountApi = {
-  async register(email, password, guestList) {
-    const body = { email, password, guest_list: toWire(guestList) };
-    return toAuthResult(await request<AuthResponse>("/api/auth/register/", { method: "POST", body }));
-  },
-  async login(email, password, guestList) {
-    const body = { email, password, guest_list: toWire(guestList) };
-    return toAuthResult(await request<AuthResponse>("/api/auth/login/", { method: "POST", body }));
-  },
-  async google(idToken, guestList) {
-    const body = { id_token: idToken, guest_list: toWire(guestList) };
-    return toAuthResult(await request<AuthResponse>("/api/auth/google/", { method: "POST", body }));
-  },
+  register: (email, password, guestList) =>
+    authenticate("/api/auth/register/", { email, password }, guestList),
+  login: (email, password, guestList) =>
+    authenticate("/api/auth/login/", { email, password }, guestList),
+  google: (idToken, guestList) =>
+    authenticate("/api/auth/google/", { id_token: idToken }, guestList),
   async logout(token) {
     await request<void>("/api/auth/logout/", { method: "POST", token });
   },

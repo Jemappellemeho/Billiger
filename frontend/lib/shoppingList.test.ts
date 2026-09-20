@@ -3,6 +3,13 @@ import {
   addItem,
   addPreference,
   createEmptyState,
+  MAX_BRAND_LENGTH,
+  MAX_CATEGORY_LENGTH,
+  MAX_ITEMS,
+  MAX_NAME_LENGTH,
+  MAX_PREFERENCE_ENTRIES,
+  MAX_PREFERENCE_LENGTH,
+  MAX_QUANTITY,
   removeItem,
   removePreference,
   setCategory,
@@ -89,6 +96,43 @@ describe("setQuantity", () => {
     let state = addItem(createEmptyState(), { name: "Milch" });
     state = setQuantity(state, "milch", 0);
     expect(state.items[0].quantity).toBe(1);
+  });
+
+  test("clamps quantity to the maximum the account storage accepts", () => {
+    let state = addItem(createEmptyState(), { name: "Milch" });
+    state = setQuantity(state, "milch", 100000);
+    expect(state.items[0].quantity).toBe(MAX_QUANTITY);
+  });
+});
+
+describe("account storage limits", () => {
+  test("names, brands and categories are cut to the length the account storage accepts", () => {
+    const state = addItem(createEmptyState(), {
+      name: "x".repeat(MAX_NAME_LENGTH + 50),
+      brand: "y".repeat(MAX_BRAND_LENGTH + 50),
+      category: "z".repeat(MAX_CATEGORY_LENGTH + 50),
+    });
+
+    expect(state.items[0].name).toHaveLength(MAX_NAME_LENGTH);
+    expect(state.items[0].brand).toHaveLength(MAX_BRAND_LENGTH);
+    expect(state.items[0].category).toHaveLength(MAX_CATEGORY_LENGTH);
+  });
+
+  test("the list holds at most the number of items the account storage accepts", () => {
+    let state = createEmptyState();
+    for (let i = 0; i < MAX_ITEMS + 5; i += 1) state = addItem(state, { name: `Artikel ${i}` });
+
+    expect(state.items).toHaveLength(MAX_ITEMS);
+  });
+
+  test("preferences are cut and capped to what the account storage accepts", () => {
+    let state = addPreference(createEmptyState(), "preferredBrands", "b".repeat(MAX_PREFERENCE_LENGTH + 20));
+    expect(state.preferences.preferredBrands[0]).toHaveLength(MAX_PREFERENCE_LENGTH);
+
+    for (let i = 0; i < MAX_PREFERENCE_ENTRIES + 5; i += 1) {
+      state = addPreference(state, "excludedStores", `Laden ${i}`);
+    }
+    expect(state.preferences.excludedStores).toHaveLength(MAX_PREFERENCE_ENTRIES);
   });
 });
 

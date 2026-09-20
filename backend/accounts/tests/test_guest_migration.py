@@ -1,5 +1,3 @@
-from django.contrib.auth import get_user_model
-
 from accounts.tests.base import AccountsAPITestCase
 from accounts.tests.helpers import LIST_URL, LOGIN_URL, auth, item, register, shopping_list
 
@@ -96,7 +94,7 @@ class GuestListMigrationTests(AccountsAPITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("guest_list", response.data)
-        self.assertFalse(get_user_model().objects.filter(username="anna@example.com").exists())
+        self.assertEqual(register(self.client).status_code, 201)  # no account was created
 
     def test_a_failed_login_does_not_touch_the_stored_list(self):
         token = register(self.client).data["token"]

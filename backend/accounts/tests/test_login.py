@@ -1,8 +1,7 @@
 from django.contrib.auth import get_user_model
-from accounts.tests.base import AccountsAPITestCase
 
-LOGIN_URL = "/api/auth/login/"
-LOGOUT_URL = "/api/auth/logout/"
+from accounts.tests.base import AccountsAPITestCase
+from accounts.tests.helpers import LOGIN_URL, LOGOUT_URL, auth
 
 
 class LoginTests(AccountsAPITestCase):
@@ -38,8 +37,8 @@ class LoginTests(AccountsAPITestCase):
             LOGIN_URL, {"email": "anna@example.com", "password": "correct-horse-battery"}
         ).data["token"]
 
-        first = self.client.post(LOGOUT_URL, HTTP_AUTHORIZATION=f"Token {token}")
-        second = self.client.post(LOGOUT_URL, HTTP_AUTHORIZATION=f"Token {token}")
+        first = self.client.post(LOGOUT_URL, **auth(token))
+        second = self.client.post(LOGOUT_URL, **auth(token))
 
         self.assertEqual(first.status_code, 204)
         self.assertEqual(second.status_code, 401)

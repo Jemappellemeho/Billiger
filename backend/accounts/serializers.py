@@ -9,7 +9,8 @@ MAX_PREFERENCE_ENTRIES = 100
 
 
 class ShoppingListItemSerializer(serializers.Serializer):
-    id = serializers.CharField(max_length=300)
+    # brand (100) + '|' + name (200), see the frontend's itemId
+    id = serializers.CharField(max_length=400)
     name = serializers.CharField(max_length=200)
     brand = serializers.CharField(max_length=100, allow_null=True)
     category = serializers.CharField(max_length=100, allow_null=True)
@@ -42,10 +43,16 @@ class ShoppingListSerializer(serializers.Serializer):
         return items
 
 
-class RegisterSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    password = serializers.CharField(write_only=True, trim_whitespace=False)
+class GuestListSerializer(serializers.Serializer):
+    """Base for the sign-in serializers: an optional guest-mode list to migrate into the account."""
+
     guest_list = ShoppingListSerializer(required=False)
+
+
+class RegisterSerializer(GuestListSerializer):
+    # 150 = Django's username limit; the lowercased email is stored as the username.
+    email = serializers.EmailField(max_length=150)
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
 
     def validate_email(self, value):
         # Accounts are identified by the lowercased email, stored as the username.
@@ -63,12 +70,10 @@ class RegisterSerializer(serializers.Serializer):
         return attrs
 
 
-class LoginSerializer(serializers.Serializer):
+class LoginSerializer(GuestListSerializer):
     email = serializers.CharField()
     password = serializers.CharField(write_only=True, trim_whitespace=False)
-    guest_list = ShoppingListSerializer(required=False)
 
 
-class GoogleLoginSerializer(serializers.Serializer):
+class GoogleLoginSerializer(GuestListSerializer):
     id_token = serializers.CharField()
-    guest_list = ShoppingListSerializer(required=False)

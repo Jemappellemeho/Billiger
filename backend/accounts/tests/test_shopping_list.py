@@ -47,6 +47,15 @@ class ShoppingListStorageTests(AccountsAPITestCase):
 
         self.assertEqual(got.data, shopping_list())
 
+    def test_an_item_at_the_size_limits_the_frontend_allows_is_accepted(self):
+        longest = item("n" * 200, brand="b" * 100, category="c" * 100, quantity=999)
+
+        response = self.client.put(
+            LIST_URL, shopping_list(items=[longest]), format="json", **auth(self.token)
+        )
+
+        self.assertEqual(response.status_code, 200)
+
     def test_an_invalid_list_is_rejected_and_the_stored_list_is_kept(self):
         self.client.put(LIST_URL, shopping_list(items=[item("Milch")]), format="json", **auth(self.token))
 
