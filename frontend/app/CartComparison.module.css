@@ -1,0 +1,205 @@
+.section {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.empty {
+  color: #666;
+}
+
+.unavailable {
+  color: #a15c00;
+  font-size: 14px;
+}
+
+.muted {
+  color: #666;
+  font-size: 13px;
+}
+
+.toggle {
+  display: flex;
+  background: #eee;
+  border-radius: 999px;
+  padding: 4px;
+  width: fit-content;
+}
+
+.toggle button {
+  border: none;
+  background: none;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #666;
+}
+
+.toggleActive {
+  background: #fff;
+  color: #171717;
+}
+
+.heroTotal {
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sliderRow input[type="range"] {
+  flex: 1;
+}
+
+.stopCards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stopCard {
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.stopItems {
+  font-size: 13px;
+  color: #666;
+  margin-top: 4px;
+}
+
+.ladderHeading {
+  margin: 4px 0 0;
+}
+
+.ladderList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ladderRow,
+.ladderRowActive {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.ladderRowActive {
+  border-color: #171717;
+  background: #f5f5f5;
+}
+
+.ladderBadge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #eee;
+  color: #555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.ladderInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ladderMarginal {
+  font-size: 12px;
+  color: #666;
+}
+
+.ladderTotal {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.itemSavings h3 {
+  margin: 4px 0;
+}
+
+.itemSavingsList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.itemSavingsRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 1px dashed #e5e5e5;
+  padding-bottom: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .empty,
+  .muted,
+  .stopItems,
+  .ladderMarginal {
+    color: #999;
+  }
+
+  .unavailable {
+    color: #e0a94a;
+  }
+
+  .toggle {
+    background: #222;
+  }
+
+  .toggleActive {
+    background: #111;
+    color: #ededed;
+  }
+
+  .stopCard,
+  .ladderRow,
+  .ladderRowActive {
+    background: #111;
+    color: #ededed;
+    border-color: #333;
+  }
+
+  .ladderRowActive {
+    border-color: #ededed;
+    background: #1a1a1a;
+  }
+
+  .itemSavingsRow {
+    border-color: #333;
+  }
+}

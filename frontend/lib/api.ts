@@ -50,3 +50,82 @@ export async function searchProducts(
   }
   return response.json();
 }
+
+export type CartCompareItem = {
+  name: string;
+  brand?: string | null;
+  quantity: number;
+};
+
+export type CartLine = {
+  name: string;
+  brand: string | null;
+  quantity: number;
+  advertiser: string;
+  price: number;
+  savings_vs_most_expensive: number;
+  savings_vs_regular: number | null;
+};
+
+export type StoreTotal = {
+  advertiser: string;
+  covers_all_items: boolean;
+  total: number | null;
+  missing_items: string[];
+};
+
+export type SingleStoreResult = {
+  advertiser: string;
+  total: number;
+  items: CartLine[];
+} | null;
+
+export type FullSplitResult = {
+  total: number;
+  assignment: CartLine[];
+};
+
+export type LadderRung = {
+  stops: number;
+  stores: string[];
+  total: number;
+  marginal_savings: number;
+  assignment: CartLine[];
+};
+
+export type CartComparisonResponse = {
+  zip_code: string;
+  unavailable_items: string[];
+  store_totals: StoreTotal[];
+  single_store: SingleStoreResult;
+  full_split: FullSplitResult;
+  ladder: LadderRung[];
+};
+
+export class CartComparisonError extends Error {}
+
+export async function compareCart(
+  items: CartCompareItem[],
+  location: SearchLocation
+): Promise<CartComparisonResponse> {
+  const body: Record<string, unknown> = { items };
+  if ("zipCode" in location) {
+    body.zip_code = location.zipCode;
+  } else {
+    body.lat = location.lat;
+    body.lon = location.lon;
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/compare/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const responseBody = await response.json().catch(() => ({}) as { detail?: string });
+    throw new CartComparisonError(
+      responseBody.detail ?? `Warenkorb-Vergleich fehlgeschlagen (${response.status})`
+    );
+  }
+  return response.json();
+}
