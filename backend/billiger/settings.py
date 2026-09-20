@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'search',
     'accounts',
     'streaks',
+    'assistant',
 ]
 
 MIDDLEWARE = [
@@ -170,6 +171,8 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         # Brute-force guard for register/login/google (per client IP).
         'auth': '10/min',
+        # Every assistant turn is a paid LLM call (per account).
+        'assistant': '30/min',
     },
 }
 
@@ -177,3 +180,11 @@ REST_FRAMEWORK = {
 # Google sign-in (Ticket 12): the OAuth client ID whose ID tokens are accepted.
 # Empty disables Google login (the endpoint answers 503).
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
+
+
+# Built-in assistant (Ticket 14): the Anthropic API key and model behind /api/assistant/chat/.
+# Without a key the endpoint answers 503. Fallbacks re-run a request the model's safety
+# classifiers declined on a fallback model inside the same call; set to 0 to disable.
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+ASSISTANT_MODEL = os.environ.get('ASSISTANT_MODEL', 'claude-opus-5')
+ASSISTANT_LLM_FALLBACKS = os.environ.get('ASSISTANT_LLM_FALLBACKS', '1') == '1'
