@@ -6,6 +6,7 @@ from search.comparison import compare_cart, select_matching_group
 from search.location import InvalidLocation, LocationResolver
 from search.marktguru_client import client_from_django_settings
 from search.matching import group_offers
+from streaks.tracking import record_comparison
 
 
 def _resolve_zip_code(source):
@@ -60,7 +61,8 @@ class CartComparisonView(APIView):
     For a full shopping list, returns (a) the cheapest single store that
     covers everything, (b) the full multi-store per-product-minimum split,
     and (c) the stepped ladder between them — see search.comparison for the
-    actual calculation (Ticket 11).
+    actual calculation (Ticket 11). A signed-in caller's comparison also
+    counts toward their weekly streak (Ticket 13, see streaks.tracking).
     """
 
     def post(self, request):
@@ -82,7 +84,11 @@ class CartComparisonView(APIView):
                 {"detail": "Marktguru ist derzeit nicht erreichbar."}, status=502
             )
 
-        return Response({"zip_code": zip_code, **compare_cart(item_offers)})
+        comparison = compare_cart(item_offers)
+        if request.user.is_authenticated:
+            record_comparison(request.user, comparison)  # counts toward the weekly streak
+
+        return Response({"zip_code": zip_code, **comparison})
 
     def _parse_items(self, items_payload):
         if not isinstance(items_payload, list) or not items_payload:

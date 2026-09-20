@@ -1,0 +1,115 @@
+.hero {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px;
+  border: 1px solid #e2e2e2;
+  border-radius: 16px;
+}
+
+.caption {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #666;
+}
+
+.amount {
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: #1b6b3a;
+}
+
+.empty {
+  color: #999;
+}
+
+.reference {
+  font-size: 14px;
+  color: #666;
+}
+
+.streak {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.flames {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.lit {
+  filter: none;
+}
+
+.dim {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.unlit {
+  filter: grayscale(1);
+  opacity: 0.35;
+}
+
+.streakLabel {
+  font-weight: 600;
+}
+
+.note {
+  font-size: 14px;
+  color: #666;
+}
+
+.top {
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.details {
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.details summary {
+  cursor: pointer;
+  color: #666;
+  font-weight: 600;
+}
+
+.details dl,
+.details ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  list-style: none;
+}
+
+.details dl > div,
+.details li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.details h3 {
+  margin-top: 12px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #666;
+}
+
+.total {
+  margin-top: 12px;
+  color: #666;
+}

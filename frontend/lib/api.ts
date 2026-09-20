@@ -1,3 +1,5 @@
+import type { StreakSummary } from "./streak";
+
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export type Offer = {
@@ -104,9 +106,11 @@ export type CartComparisonResponse = {
 
 export class CartComparisonError extends Error {}
 
+/** With a `token`, the comparison also counts toward the account's weekly streak. */
 export async function compareCart(
   items: CartCompareItem[],
-  location: SearchLocation
+  location: SearchLocation,
+  token?: string
 ): Promise<CartComparisonResponse> {
   const body: Record<string, unknown> = { items };
   if ("zipCode" in location) {
@@ -116,9 +120,12 @@ export async function compareCart(
     body.lon = location.lon;
   }
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Token ${token}`;
+
   const response = await fetch(`${API_BASE_URL}/api/compare/`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   if (!response.ok) {
@@ -126,6 +133,18 @@ export async function compareCart(
     throw new CartComparisonError(
       responseBody.detail ?? `Warenkorb-Vergleich fehlgeschlagen (${response.status})`
     );
+  }
+  return response.json();
+}
+
+export class StreakError extends Error {}
+
+export async function fetchStreakSummary(token: string): Promise<StreakSummary> {
+  const response = await fetch(`${API_BASE_URL}/api/streak/`, {
+    headers: { Authorization: `Token ${token}` },
+  });
+  if (!response.ok) {
+    throw new StreakError(`Streak konnte nicht geladen werden (${response.status})`);
   }
   return response.json();
 }

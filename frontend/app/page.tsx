@@ -1,8 +1,10 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useAccount } from "@/hooks/useAccount";
 import { useLocation } from "@/hooks/useLocation";
 import { useShoppingList } from "@/hooks/useShoppingList";
+import { useStreak } from "@/hooks/useStreak";
 import {
   CartComparisonError,
   CartComparisonResponse,
@@ -13,6 +15,7 @@ import {
 } from "@/lib/api";
 import { AccountPanel } from "./AccountPanel";
 import { CartComparisonView } from "./CartComparison";
+import { HomeHero } from "./HomeHero";
 import { ShoppingListView } from "./ShoppingList";
 import styles from "./page.module.css";
 
@@ -40,6 +43,8 @@ function resolveSearchLocation(location: ReturnType<typeof useLocation>["locatio
 export default function Home() {
   const { location, setManualZipCode } = useLocation();
   const shoppingList = useShoppingList();
+  const { session } = useAccount();
+  const streak = useStreak(session?.token ?? null);
   const [query, setQuery] = useState("");
   const [zipCodeInput, setZipCodeInput] = useState("");
   const [results, setResults] = useState<ProductGroup[] | null>(null);
@@ -98,9 +103,11 @@ export default function Home() {
           brand: item.brand,
           quantity: item.quantity,
         })),
-        searchLocation
+        searchLocation,
+        session?.token
       );
       setComparison(response);
+      streak.refresh();
     } catch (err) {
       setComparison(null);
       setComparisonError(
@@ -124,6 +131,8 @@ export default function Home() {
       <p className={styles.subtitle}>Wo ist dein Produkt gerade am günstigsten?</p>
 
       <AccountPanel />
+
+      {streak.summary && <HomeHero summary={streak.summary} />}
 
       {location.status === "detecting" && <p>Standort wird ermittelt …</p>}
 

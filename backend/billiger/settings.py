@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'search',
     'accounts',
+    'streaks',
 ]
 
 MIDDLEWARE = [
