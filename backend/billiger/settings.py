@@ -41,8 +41,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework.authtoken',
     'corsheaders',
     'search',
+    'accounts',
 ]
 
 MIDDLEWARE = [
@@ -155,3 +157,22 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(day_of_week=1, hour=3, minute=0),
     },
 }
+
+
+# Django REST Framework
+# Clients are cross-origin (Next.js on :3000), so the API authenticates with
+# a per-account token in the Authorization header rather than session cookies.
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        # Brute-force guard for register/login/google (per client IP).
+        'auth': '10/min',
+    },
+}
+
+
+# Google sign-in (Ticket 12): the OAuth client ID whose ID tokens are accepted.
+# Empty disables Google login (the endpoint answers 503).
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
