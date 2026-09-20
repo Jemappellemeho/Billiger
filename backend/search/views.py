@@ -1,12 +1,17 @@
+import logging
+
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.authentication import OptionalTokenAuthentication
 from search.anchor_products import apply_anchor_overrides
 from search.comparison import compare_cart, select_matching_group
 from search.location import InvalidLocation, LocationResolver
 from search.marktguru_client import client_from_django_settings
 from search.matching import group_offers
 from streaks.tracking import record_comparison
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_zip_code(source):
@@ -62,8 +67,11 @@ class CartComparisonView(APIView):
     covers everything, (b) the full multi-store per-product-minimum split,
     and (c) the stepped ladder between them — see search.comparison for the
     actual calculation (Ticket 11). A signed-in caller's comparison also
-    counts toward their weekly streak (Ticket 13, see streaks.tracking).
+    counts toward their weekly streak (Ticket 13, see streaks.tracking); a
+    stale token is treated as a guest rather than rejected.
     """
+
+    authentication_classes = [OptionalTokenAuthentication]
 
     def post(self, request):
         try:
@@ -86,7 +94,11 @@ class CartComparisonView(APIView):
 
         comparison = compare_cart(item_offers)
         if request.user.is_authenticated:
-            record_comparison(request.user, comparison)  # counts toward the weekly streak
+            try:
+                record_comparison(request.user, comparison)  # counts toward the weekly streak
+            except Exception:
+                # The comparison itself succeeded; losing a streak tick must not cost the user it.
+                logger.exception("Could not record comparison for the streak")
 
         return Response({"zip_code": zip_code, **comparison})
 

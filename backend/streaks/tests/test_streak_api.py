@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from accounts.tests.base import AccountsAPITestCase
+from accounts.tests.helpers import LOGOUT_URL, auth
 from search.marktguru_client import MarktguruClient
 from search.tests.test_cart_comparison_view import _fake_session_get, _raw_offer, _response
 from streaks.tests.helpers import (
@@ -75,6 +77,23 @@ class CompletedComparisonTests(AccountsAPITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(streak_summary(self.client, token, moment=WEEK_1).json()["streak"]["weeks"], 0)
+
+    def test_stale_token_compares_as_a_guest_instead_of_failing(self):
+        token = sign_up(self.client)
+        self.client.post(LOGOUT_URL, **auth(token))  # revokes the token
+
+        response = compare(self.client, token, moment=WEEK_1)
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_a_failure_while_tracking_does_not_fail_the_comparison(self):
+        token = sign_up(self.client)
+
+        with patch("search.views.record_comparison", side_effect=RuntimeError("db down")):
+            response = compare(self.client, token, moment=WEEK_1)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("full_split", response.json())
 
     def test_repeating_a_comparison_in_the_same_week_counts_once(self):
         token = sign_up(self.client)
