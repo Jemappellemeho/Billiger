@@ -27,6 +27,14 @@ INVALID_PARAMS = -32602
 TOOL_FAILED = "Das Werkzeug ist gerade ausgefallen."
 
 
+class ProtocolError(Exception):
+    """A request the protocol itself rejects (a JSON-RPC error), as opposed to a tool that ran and failed."""
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
 def error(code, message, request_id=None):
     return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
@@ -53,19 +61,23 @@ def handle(message, user, token_scopes):
     if not isinstance(method, str) or not isinstance(params, dict):
         return error(INVALID_REQUEST, "method muss ein String und params ein Objekt sein.", request_id)
 
-    if method == "initialize":
-        result = _initialize(params)
-    elif method == "ping":
-        result = {}
-    elif method == "tools/list":
-        result = {"tools": [tool.definition for tool in TOOLS if tool.scope in token_scopes]}
-    elif method == "tools/call":
-        result = _call_tool(params, user, token_scopes)
-        if "error" in result:
-            return error(result["error"]["code"], result["error"]["message"], request_id)
-    else:
-        return error(METHOD_NOT_FOUND, f"Unbekannte Methode: {method}", request_id)
+    try:
+        result = _dispatch(method, params, user, token_scopes)
+    except ProtocolError as exc:
+        return error(exc.code, str(exc), request_id)
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
+
+def _dispatch(method, params, user, token_scopes):
+    if method == "initialize":
+        return _initialize(params)
+    if method == "ping":
+        return {}
+    if method == "tools/list":
+        return {"tools": [tool.definition for tool in TOOLS if tool.scope in token_scopes]}
+    if method == "tools/call":
+        return _call_tool(params, user, token_scopes)
+    raise ProtocolError(METHOD_NOT_FOUND, f"Unbekannte Methode: {method}")
 
 
 def _initialize(params):
@@ -82,9 +94,9 @@ def _call_tool(params, user, token_scopes):
     tool = TOOLS_BY_NAME.get(params.get("name"))
     arguments = params.get("arguments") or {}
     if tool is None:
-        return {"error": {"code": INVALID_PARAMS, "message": f"Unbekanntes Werkzeug: {params.get('name')}"}}
+        raise ProtocolError(INVALID_PARAMS, f"Unbekanntes Werkzeug: {params.get('name')}")
     if not isinstance(arguments, dict):
-        return {"error": {"code": INVALID_PARAMS, "message": "arguments muss ein Objekt sein."}}
+        raise ProtocolError(INVALID_PARAMS, "arguments muss ein Objekt sein.")
     if tool.scope not in token_scopes:
         return _tool_error(
             f"Dafür fehlt die Berechtigung „{tool.scope}“. Der Nutzer muss Billiger neu verbinden und den Zugriff erlauben."

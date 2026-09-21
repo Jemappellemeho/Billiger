@@ -2,6 +2,7 @@ from io import StringIO
 
 from django.core.management import CommandError, call_command
 from django.test import override_settings
+from oauth2_provider.models import AccessToken
 
 from mcp_server.tests.helpers import McpTestCase
 
@@ -30,8 +31,6 @@ class DevTokenTests(McpTestCase):
         self.assertEqual(len(tools), 4)
 
     def test_it_is_the_same_audience_validation_as_for_any_other_token(self):
-        from oauth2_provider.models import AccessToken
-
         token = issue("anna@example.com")
         AccessToken.objects.filter(token=token).update(resource=["https://elsewhere.example/mcp"])
 
@@ -43,14 +42,11 @@ class DevTokenTests(McpTestCase):
         with self.assertRaises(CommandError):
             issue("anna@example.com", "--scope", "billiger:admin")
 
-    @override_settings(MCP_ALLOW_DEV_TOKENS=False, DEBUG=False)
-    def test_it_refuses_to_run_outside_development(self):
-        with self.assertRaises(CommandError):
-            issue("anna@example.com")
-
-    @override_settings(MCP_ALLOW_DEV_TOKENS=False, DEBUG=True)
-    def test_it_runs_in_debug(self):
-        self.assertTrue(issue("anna@example.com"))
+    @override_settings(MCP_ALLOW_DEV_TOKENS=False)
+    def test_it_refuses_to_run_without_the_explicit_opt_in_even_in_debug(self):
+        for debug in (False, True):
+            with override_settings(DEBUG=debug), self.assertRaises(CommandError):
+                issue("anna@example.com")
 
     def test_there_is_no_http_endpoint_that_hands_out_tokens_to_users(self):
         self.client.force_login(self.user)

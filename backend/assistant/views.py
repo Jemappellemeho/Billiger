@@ -79,7 +79,8 @@ class ProposalCollectionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        pending = Proposal.objects.filter(user=request.user, status=Proposal.Status.PENDING).order_by("-created_at", "-pk")
+        pending = Proposal.objects.filter(user=request.user, status=Proposal.Status.PENDING)
+        pending = pending.order_by("-created_at", "-pk")
         return Response({"proposals": [proposals.serialize(proposal) for proposal in pending]})
 
     def post(self, request):

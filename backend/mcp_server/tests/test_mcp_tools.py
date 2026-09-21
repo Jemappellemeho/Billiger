@@ -1,12 +1,15 @@
 import json
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from rest_framework.authtoken.models import Token
 
 from accounts import shopping_list
 from accounts.tests.helpers import item
+from accounts.tests.helpers import shopping_list as list_document
 from assistant.models import Proposal
 from mcp_server.tests.helpers import McpTestCase
+from mcp_server.tools import READ_SCOPE, WRITE_SCOPE
 from search.tests.test_cart_comparison_view import _fake_session_get
 
 READ_TOOLS = {"get_shopping_list", "search_product_prices", "compare_shopping_list", "get_savings_streak"}
@@ -23,13 +26,7 @@ class McpApiTestCase(McpTestCase):
         self.access_token = self.issue_token()
 
     def stored_list(self, *items):
-        shopping_list.save(
-            self.user,
-            {
-                "items": list(items),
-                "preferences": {"preferred_brands": [], "excluded_ingredients": [], "excluded_stores": []},
-            },
-        )
+        shopping_list.save(self.user, list_document(items))
 
     def rest(self, method, path, body=None, **params):
         """What the app itself would get from the REST API (signed in with the account's own token)."""
@@ -109,7 +106,7 @@ class ToolListTests(McpApiTestCase):
         self.assertEqual(self.names(self.access_token), READ_TOOLS | WRITE_TOOLS)
 
     def test_a_read_only_token_is_only_offered_the_read_actions(self):
-        self.assertEqual(self.names(self.issue_token(scope="billiger:read")), READ_TOOLS)
+        self.assertEqual(self.names(self.issue_token(scope=READ_SCOPE)), READ_TOOLS)
 
     def test_no_tool_can_accept_a_proposal_or_touch_the_account(self):
         forbidden = ("accept", "reject", "decide", "confirm", "password", "email", "delete", "payment", "account")
@@ -174,16 +171,8 @@ class ReadToolMappingTests(McpApiTestCase):
         self.assertEqual(result["structuredContent"], self.rest("get", "/api/streak/").json())
 
     def test_a_tool_only_ever_sees_the_token_owners_data(self):
-        from django.contrib.auth import get_user_model
-
         other = get_user_model().objects.create_user(username="ben@example.com", email="ben@example.com")
-        shopping_list.save(
-            other,
-            {
-                "items": [item("Bier")],
-                "preferences": {"preferred_brands": [], "excluded_ingredients": [], "excluded_stores": []},
-            },
-        )
+        shopping_list.save(other, list_document([item("Bier")]))
 
         result = self.tool("get_shopping_list", access_token=self.issue_token(user=other))
 
@@ -291,7 +280,7 @@ class ProposeToolMappingTests(McpApiTestCase):
 
 class ScopeTests(McpApiTestCase):
     def test_a_read_only_token_cannot_propose(self):
-        read_only = self.issue_token(scope="billiger:read")
+        read_only = self.issue_token(scope=READ_SCOPE)
 
         result = self.tool("propose_shopping_list_change", {"items": [{"name": "Butter"}]}, access_token=read_only)
 
@@ -300,7 +289,7 @@ class ScopeTests(McpApiTestCase):
         self.assertEqual(Proposal.objects.count(), 0)
 
     def test_a_write_only_token_cannot_read(self):
-        write_only = self.issue_token(scope="billiger:write")
+        write_only = self.issue_token(scope=WRITE_SCOPE)
 
         result = self.tool("get_shopping_list", access_token=write_only)
 
@@ -313,7 +302,7 @@ class ScopeTests(McpApiTestCase):
         self.assertEqual(response.json()["error"]["code"], -32602)
 
     def test_a_token_from_the_oauth_flow_carries_exactly_the_scopes_the_user_allowed(self):
-        token = self.token_via_oauth(scope="billiger:read")["access_token"]
+        token = self.token_via_oauth(scope=READ_SCOPE)["access_token"]
 
         names = {tool["name"] for tool in self.rpc("tools/list", access_token=token).json()["result"]["tools"]}
 

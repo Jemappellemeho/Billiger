@@ -1,10 +1,15 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.test import override_settings
-from oauth2_provider.models import Application
+from django.utils import timezone
+from oauth2_provider.models import AccessToken, Application
 
+from mcp_server.clients import ensure_clients
 from mcp_server.tests.helpers import (
     CHATGPT_CLIENT_ID,
     CLAUDE_CLIENT_ID,
+    TOKEN_URL,
     McpTestCase,
     code_from,
     pkce_pair,
@@ -131,14 +136,34 @@ class ResourceAudienceTests(McpTestCase):
         self.assertEqual(self.rpc("ping", access_token=access_token).status_code, 401)
 
     def test_an_expired_token_is_rejected(self):
-        from datetime import timedelta
-
-        from django.utils import timezone
-        from oauth2_provider.models import AccessToken
-
         access_token = self.issue_token()
         AccessToken.objects.update(expires=timezone.now() - timedelta(minutes=1))
         self.assertEqual(self.rpc("ping", access_token=access_token).status_code, 401)
+
+
+class RefreshTokenTests(McpTestCase):
+    def refresh(self, refresh_token):
+        return self.client.post(
+            TOKEN_URL,
+            {"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": CLAUDE_CLIENT_ID},
+        )
+
+    def test_a_refreshed_token_is_still_bound_to_the_mcp_resource(self):
+        issued = self.token_via_oauth()
+
+        refreshed = self.refresh(issued["refresh_token"])
+
+        self.assertEqual(refreshed.status_code, 200)
+        token = refreshed.json()["access_token"]
+        self.assertNotEqual(token, issued["access_token"])
+        self.assertEqual(AccessToken.objects.get(token=token).resource, [self.resource])
+        self.assertEqual(self.rpc("ping", access_token=token).status_code, 200)
+
+    def test_a_refresh_token_can_only_be_used_once(self):
+        issued = self.token_via_oauth()
+        self.refresh(issued["refresh_token"])
+
+        self.assertEqual(self.refresh(issued["refresh_token"]).status_code, 400)
 
 
 class DiscoveryTests(McpTestCase):
@@ -167,8 +192,6 @@ class DiscoveryTests(McpTestCase):
 
 class ChatGptClientTests(McpTestCase):
     def test_the_chatgpt_client_is_registered_once_its_redirect_uri_is_configured(self):
-        from mcp_server.clients import ensure_clients
-
         with override_settings(MCP_CHATGPT_REDIRECT_URI="https://chatgpt.com/connector/oauth/xyz"):
             ensure_clients()
             ensure_clients()  # idempotent

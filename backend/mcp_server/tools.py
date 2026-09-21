@@ -24,6 +24,8 @@ ZIP_CODE_PROPERTY = {
     "description": "Vierstellige PLZ, für die die Preise gelten. Frage den Nutzer danach, falls du sie nicht kennst.",
 }
 
+# Not `assistant.tools.PROPOSAL_NEXT_STEP`: there the user sees the diff in the chat, here the client
+# has to show it and send the user to Billiger to decide.
 PROPOSAL_NEXT_STEP = (
     "Der Vorschlag ist noch NICHT übernommen. Zeige dem Nutzer den vollständigen Diff (proposal.diff) "
     "und sag ihm, dass die Änderung erst gilt, wenn er sie in Billiger übernimmt (oder ändert oder "
@@ -34,6 +36,7 @@ PROPOSAL_NEXT_STEP = (
 @dataclass(frozen=True)
 class McpTool:
     name: str
+    description: str
     scope: str
     call: Callable[[object, dict], RestResponse]
     read_only: bool
@@ -44,7 +47,7 @@ class McpTool:
     def definition(self):
         return {
             "name": self.name,
-            "description": _ASSISTANT_TOOLS[self.name].description,
+            "description": self.description,
             "inputSchema": {"type": "object", "properties": self.properties, "required": list(self.required)},
             "annotations": {"readOnlyHint": self.read_only, "destructiveHint": False, "openWorldHint": False},
         }
@@ -62,7 +65,8 @@ def _get_savings_streak(user, arguments):
 
 def _search_product_prices(user, arguments):
     """GET /api/search/?q=&zip_code="""
-    return call_rest(user, "GET", "product-search", params={"q": arguments.get("query"), "zip_code": arguments.get("zip_code")})
+    params = {"q": arguments.get("query"), "zip_code": arguments.get("zip_code")}
+    return call_rest(user, "GET", "product-search", params=params)
 
 
 def _compare_shopping_list(user, arguments):
@@ -93,6 +97,7 @@ def _tool(name, scope, call, *, read_only, properties=None, required=None):
     assistant_tool = _ASSISTANT_TOOLS[name]
     return McpTool(
         name=name,
+        description=assistant_tool.description,
         scope=scope,
         call=call,
         read_only=read_only,

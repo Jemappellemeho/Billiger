@@ -2,20 +2,26 @@ import base64
 import hashlib
 import json
 import secrets
+from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.utils import timezone
 from oauth2_provider.models import AccessToken
 from rest_framework.test import APITestCase
 
 from mcp_server.clients import CHATGPT_CLIENT_ID, CLAUDE_CLIENT_ID  # noqa: F401  (re-exported for the tests)
+from mcp_server.tools import READ_SCOPE, WRITE_SCOPE
 
 AUTHORIZE_URL = "/oauth/authorize/"
 TOKEN_URL = "/oauth/token/"
 MCP_URL = "/mcp/"
 PASSWORD = "correct-horse-battery"
+
+# "Not given, use the usual one": for parameters where None must stay a real value (no PKCE, no resource).
+DEFAULT = object()
 
 
 class McpTestCase(APITestCase):
@@ -32,7 +38,7 @@ class McpTestCase(APITestCase):
     def resource(self):
         return settings.MCP_RESOURCE_URL
 
-    def authorize(self, *, client_id=CLAUDE_CLIENT_ID, approve=True, challenge="use-pkce-pair", method="S256", **params):
+    def authorize(self, *, client_id=CLAUDE_CLIENT_ID, approve=True, challenge=DEFAULT, method="S256", **params):
         """The user's side of the flow: open the consent screen, then allow (or deny) it.
 
         Returns the final response: normally the redirect back to the client with a `code`.
@@ -41,12 +47,12 @@ class McpTestCase(APITestCase):
             "response_type": "code",
             "client_id": client_id,
             "redirect_uri": settings.MCP_CLAUDE_REDIRECT_URI,
-            "scope": "billiger:read",
+            "scope": READ_SCOPE,
             "state": "abc123",
             "resource": self.resource,
             **params,
         }
-        if challenge == "use-pkce-pair":
+        if challenge is DEFAULT:
             _, challenge = pkce_pair()
         if challenge is not None:
             query.update(code_challenge=challenge, code_challenge_method=method)
@@ -70,16 +76,16 @@ class McpTestCase(APITestCase):
         }
         return self.client.post(TOKEN_URL, {k: v for k, v in data.items() if v is not None})
 
-    def token_via_oauth(self, *, scope="billiger:read", authorize_resource="use-default", token_resource="use-default"):
+    def token_via_oauth(self, *, scope=READ_SCOPE, authorize_resource=DEFAULT, token_resource=DEFAULT):
         """The whole flow (PKCE included); returns the token endpoint's JSON."""
         verifier, challenge = pkce_pair()
-        resource = self.resource if authorize_resource == "use-default" else authorize_resource
+        resource = self.resource if authorize_resource is DEFAULT else authorize_resource
         redirect = self.authorize(scope=scope, resource=resource, challenge=challenge)
         assert redirect.status_code == 302, redirect.content
         response = self.exchange(
             code_from(redirect),
             verifier,
-            resource=self.resource if token_resource == "use-default" else token_resource,
+            resource=self.resource if token_resource is DEFAULT else token_resource,
         )
         assert response.status_code == 200, response.content
         return response.json()
@@ -97,19 +103,15 @@ class McpTestCase(APITestCase):
         headers = self.bearer(access_token) if access_token else {}
         return self.client.post(MCP_URL, json.dumps(message), content_type="application/json", **headers, **extra)
 
-    def issue_token(self, *, scope="billiger:read billiger:write", resource="use-default", user=None, application=None):
+    def issue_token(self, *, scope=f"{READ_SCOPE} {WRITE_SCOPE}", resource=DEFAULT, user=None, application=None):
         """An access token straight in the database (skips the flow when a test is about the MCP endpoint)."""
-        from datetime import timedelta
-
-        from django.utils import timezone
-
         return AccessToken.objects.create(
             user=user or self.user,
             application=application,
             token=secrets.token_urlsafe(32),
             scope=scope,
             expires=timezone.now() + timedelta(hours=1),
-            resource=[self.resource] if resource == "use-default" else ([resource] if resource else []),
+            resource=[self.resource] if resource is DEFAULT else ([resource] if resource else []),
         ).token
 
     def call_tool(self, access_token, name, arguments=None):

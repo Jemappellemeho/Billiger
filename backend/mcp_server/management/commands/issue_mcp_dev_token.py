@@ -13,7 +13,7 @@ class Command(BaseCommand):
     help = (
         "Prints an MCP access token for an account, to try the MCP server by hand during development "
         "(a Personal Access Token in effect). Not an end-user flow: it is a command, not an endpoint, and "
-        "refuses to run outside DEBUG unless MCP_ALLOW_DEV_TOKENS=1."
+        "refuses to run unless MCP_ALLOW_DEV_TOKENS=1."
     )
 
     def add_arguments(self, parser):
@@ -26,8 +26,8 @@ class Command(BaseCommand):
         parser.add_argument("--hours", type=int, default=8, help="Lifetime in hours (default: 8).")
 
     def handle(self, *args, email, scope, hours, **options):
-        if not (settings.DEBUG or settings.MCP_ALLOW_DEV_TOKENS):
-            raise CommandError("Developer tokens are only issued when DEBUG is on or MCP_ALLOW_DEV_TOKENS=1.")
+        if not settings.MCP_ALLOW_DEV_TOKENS:
+            raise CommandError("Developer tokens are only issued when MCP_ALLOW_DEV_TOKENS=1 is set.")
 
         unknown = set(scope.split()) - set(oauth2_settings.SCOPES)
         if unknown:

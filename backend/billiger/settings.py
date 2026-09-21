@@ -207,8 +207,8 @@ MCP_CHATGPT_REDIRECT_URI = os.environ.get('MCP_CHATGPT_REDIRECT_URI', '')
 # Origin header (server-to-server) are not affected.
 MCP_ALLOWED_ORIGINS = ['https://claude.ai', 'https://chatgpt.com', 'https://chat.openai.com']
 
-# `issue_mcp_dev_token` (internal testing, no end-user flow) refuses to run outside DEBUG
-# unless this is set.
+# `issue_mcp_dev_token` (internal testing, no end-user flow) only runs with this set: an explicit
+# opt-in, since DEBUG alone is no signal here.
 MCP_ALLOW_DEV_TOKENS = os.environ.get('MCP_ALLOW_DEV_TOKENS', '') == '1'
 
 # The consent screen needs a signed-in Django session, separate from the API's token auth.
