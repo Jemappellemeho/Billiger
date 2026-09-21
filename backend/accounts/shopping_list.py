@@ -15,6 +15,13 @@ def empty_list():
     }
 
 
+def item_id(name, brand):
+    """A row's identity, derived from brand + name like the frontend's `itemId` (guest and account agree)."""
+    brand = (brand or "").strip().lower()
+    name = name.strip().lower()
+    return f"{brand}|{name}" if brand else name
+
+
 def load(user):
     stored = ShoppingList.objects.filter(user=user).first()
     return stored.data if stored else empty_list()

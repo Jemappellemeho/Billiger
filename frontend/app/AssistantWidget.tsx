@@ -1,10 +1,12 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, FormEvent, KeyboardEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useAssistant } from "@/hooks/useAssistant";
+import { useShoppingList } from "@/hooks/useShoppingList";
 import type { SearchLocation } from "@/lib/api";
 import { MAX_MESSAGE_LENGTH } from "@/lib/assistantChat";
 import { isSpeechInputSupported, startSpeechInput } from "@/lib/speech";
+import { ProposalCard } from "./ProposalCard";
 import styles from "./AssistantWidget.module.css";
 
 const SUGGESTIONS = [
@@ -12,6 +14,7 @@ const SUGGESTIONS = [
   "Was steht auf meiner Einkaufsliste?",
   "Fass meinen Warenkorb-Vergleich zusammen.",
   "Wie steht es um meine Ersparnis?",
+  "Setz Butter auf meine Einkaufsliste.",
 ];
 
 const noSubscription = () => () => {};
@@ -26,11 +29,15 @@ type Listening = { stop(): void; cancel(): void };
 export function AssistantWidget({
   token,
   location,
+  onLocationChange,
 }: {
   token: string | null;
   location: SearchLocation | null;
+  /** Called when the user accepts a location change the assistant proposed. */
+  onLocationChange: (zipCode: string) => void;
 }) {
-  const { messages, pending, send, reset } = useAssistant();
+  const { messages, pending, send, decide, revise, reset } = useAssistant();
+  const { items: listItems } = useShoppingList();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [listening, setListening] = useState(false);
@@ -160,17 +167,28 @@ export function AssistantWidget({
         )}
 
         {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`${styles.bubble} ${
-              message.role === "user" ? styles.user : message.failed ? styles.failed : styles.assistant
-            }`}
-          >
-            {message.role === "user" && message.input === "voice" && (
-              <span className={styles.voiceLabel}>🎤 per Spracheingabe transkribiert</span>
-            )}
-            {message.content}
-          </div>
+          <Fragment key={message.id}>
+            <div
+              className={`${styles.bubble} ${
+                message.role === "user" ? styles.user : message.failed ? styles.failed : styles.assistant
+              }`}
+            >
+              {message.role === "user" && message.input === "voice" && (
+                <span className={styles.voiceLabel}>🎤 per Spracheingabe transkribiert</span>
+              )}
+              {message.content}
+            </div>
+            {token &&
+              message.proposals.map((entry) => (
+                <ProposalCard
+                  key={entry.proposal.id}
+                  entry={entry}
+                  listItems={listItems}
+                  onDecide={(decision) => void decide(entry.proposal.id, decision, { token, onLocationChange })}
+                  onRevise={(changes) => revise(entry.proposal.id, changes, { token })}
+                />
+              ))}
+          </Fragment>
         ))}
 
         {pending && (

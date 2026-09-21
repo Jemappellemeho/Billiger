@@ -1,0 +1,136 @@
+.card {
+  align-self: stretch;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 20%, transparent);
+  border-radius: 12px;
+  background: var(--background);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.card h3 {
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.diff {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.added {
+  color: #1a7f37;
+}
+
+.removed {
+  color: #b42318;
+}
+
+.changed {
+  color: #9a6700;
+}
+
+.muted {
+  margin-top: 4px;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
+
+.location {
+  margin: 0;
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.editor li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rowName {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.struck .rowName {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.editor input[type="number"] {
+  width: 64px;
+}
+
+.editor input[type="text"],
+.field input[type="text"] {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.error {
+  margin-top: 6px;
+  color: #b42318;
+}
+
+.outcome {
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.actions button {
+  padding: 6px 12px;
+  font-size: 14px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 25%, transparent);
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.actions .primary {
+  border-color: #171717;
+  background: #171717;
+  color: #fff;
+}
+
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.actions button:focus-visible {
+  outline: 2px solid #2f6fed;
+  outline-offset: 2px;
+}

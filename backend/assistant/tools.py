@@ -1,16 +1,24 @@
-"""The assistant's tools (Ticket 14): the read actions that need no confirmation.
+"""The assistant's tools: the read actions that need no confirmation (Ticket 14) and the
+propose actions for changes (Ticket 15).
 
-Each tool is a thin adapter over the operation behind the matching REST
+Each read tool is a thin adapter over the operation behind the matching REST
 endpoint (`accounts.shopping_list`, `search.services`, `streaks.tracking`),
 so the assistant can't see anything the API wouldn't show that account. The
 only side effect is the one `POST /api/compare/` has too: a comparison
 counts toward the weekly streak.
+
+The write tools only *propose*: they store a pending proposal (`assistant.proposals`)
+and hand the model its diff. Nothing is applied until the user accepts it in the
+app, and no tool exists that could do that on their behalf — nor one for anything
+account-sensitive (email, password, deletion, payment).
 """
 import logging
 from dataclasses import dataclass
 from typing import Callable
 
 from accounts import shopping_list
+from assistant import proposals
+from assistant.changes import ProposalInvalid
 from search import services
 from search.location import InvalidLocation
 from streaks import tracking
@@ -176,6 +184,41 @@ def _compare_shopping_list(context, tool_input):
     }
 
 
+# The key under which a propose tool hands its proposal to the agent layer (and the client).
+PROPOSAL_KEY = "proposal"
+
+PROPOSAL_NEXT_STEP = (
+    "Der Vorschlag ist noch NICHT übernommen. Der Nutzer sieht jetzt den vollständigen Diff und kann "
+    "ihn übernehmen, ändern oder verwerfen. Fasse die Änderung in ein, zwei Sätzen zusammen, sag, dass "
+    "sie erst nach seiner Bestätigung gilt, und behaupte nie, etwas sei schon geändert."
+)
+
+
+def _propose(kind):
+    def run(context, tool_input):
+        try:
+            proposal = proposals.create(
+                context.user, kind, tool_input, current_zip_code=lambda: context.zip_code(None)
+            )
+        except ProposalInvalid as exc:
+            raise ToolError(str(exc)) from exc
+        return {PROPOSAL_KEY: proposals.serialize(proposal), "next_step": PROPOSAL_NEXT_STEP}
+
+    return run
+
+
+ITEM_PROPERTIES = {
+    "name": {"type": "string", "description": "Produktname, z. B. „Milch“."},
+    "brand": {"type": ["string", "null"], "description": "Marke, falls genannt oder bereits so in der Liste."},
+    "quantity": {"type": "integer", "minimum": 1, "description": "Menge (Standard 1)."},
+    "category": {
+        "type": ["string", "null"],
+        "description": "Kategorie; weglassen, um die bestehende beizubehalten.",
+    },
+}
+
+PREFERENCE_LIST_PROPERTY = {"type": "array", "items": {"type": "string"}}
+
 TOOLS = [
     Tool(
         name="get_shopping_list",
@@ -222,15 +265,76 @@ TOOLS = [
         run=_get_savings_streak,
         properties={},
     ),
+    Tool(
+        name="propose_shopping_list_change",
+        description=(
+            "Schlägt eine Änderung der Einkaufsliste vor (Artikel hinzufügen, entfernen, Menge ändern) — "
+            "immer als EIN Vorschlag mit dem vollständigen neuen Listenstand, nie als einzelne Schritte. "
+            "Hole vorher mit get_shopping_list den aktuellen Stand und schicke unter items die komplette "
+            "neue Liste (unveränderte Artikel inklusive). Ändert nichts, bis der Nutzer übernimmt."
+        ),
+        run=_propose("shopping_list"),
+        properties={
+            "items": {
+                "type": "array",
+                "description": "Die vollständige neue Einkaufsliste.",
+                "items": {"type": "object", "properties": ITEM_PROPERTIES, "required": ["name"]},
+            }
+        },
+        required=("items",),
+    ),
+    Tool(
+        name="propose_preferences_change",
+        description=(
+            "Schlägt eine Änderung der Präferenzen oder Favoriten vor (bevorzugte Marken, ausgeschlossene "
+            "Zutaten oder Läden, Favoriten). Schicke nur die Teile, die sich ändern — jeweils als "
+            "vollständigen neuen Stand dieses Teils (aktuellen Stand vorher mit get_shopping_list holen). "
+            "Ändert nichts, bis der Nutzer übernimmt."
+        ),
+        run=_propose("preferences"),
+        properties={
+            "preferred_brands": {**PREFERENCE_LIST_PROPERTY, "description": "Bevorzugte Marken."},
+            "excluded_ingredients": {**PREFERENCE_LIST_PROPERTY, "description": "Ausgeschlossene Zutaten."},
+            "excluded_stores": {**PREFERENCE_LIST_PROPERTY, "description": "Ausgeschlossene Läden."},
+            "favorite_items": {
+                **PREFERENCE_LIST_PROPERTY,
+                "description": (
+                    "Artikel der Einkaufsliste (Name oder id), die Favoriten sein sollen — der vollständige "
+                    "neue Stand aller Favoriten."
+                ),
+            },
+        },
+    ),
+    Tool(
+        name="propose_location_change",
+        description=(
+            "Schlägt vor, den Standort des Nutzers auf eine andere Postleitzahl zu ändern (z. B. „ich bin "
+            "gerade in Graz“). Ändert nichts, bis der Nutzer übernimmt."
+        ),
+        run=_propose("location"),
+        properties={
+            "zip_code": {
+                "type": "string",
+                "description": "Vierstellige österreichische PLZ. Bei Unsicherheit beim Nutzer nachfragen.",
+            }
+        },
+        required=("zip_code",),
+    ),
 ]
 
 _TOOLS_BY_NAME = {tool.name: tool for tool in TOOLS}
 
 TOOL_DEFINITIONS = [tool.definition for tool in TOOLS]
 
+NOT_SUPPORTED = (
+    "Diese Fähigkeit hat der Assistent nicht. Du musst die Anfrage offen ablehnen, dem Nutzer sagen, "
+    "dass es das (noch) nicht gibt, und wo sinnvoll die nächstbeste vorhandene Aktion anbieten. "
+    "Improvisiere kein Ergebnis."
+)
+
 
 def run_tool(name, tool_input, context):
     tool = _TOOLS_BY_NAME.get(name)
     if tool is None:
-        raise ToolError(f"Unbekanntes Werkzeug: {name}")
+        raise ToolError(f"Unbekanntes Werkzeug: {name}. {NOT_SUPPORTED}")
     return tool.run(context, tool_input)

@@ -10,5 +10,12 @@ export function useAssistant() {
     assistantChat.getServerSnapshot
   );
 
-  return { messages, pending, send: assistantChat.send, reset: assistantChat.reset };
+  return {
+    messages,
+    pending,
+    send: assistantChat.send,
+    decide: assistantChat.decide,
+    revise: assistantChat.revise,
+    reset: assistantChat.reset,
+  };
 }

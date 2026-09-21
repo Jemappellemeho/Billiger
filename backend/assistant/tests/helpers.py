@@ -58,3 +58,27 @@ def chat(client, token, message="Hallo", **extra):
     return client.post(
         CHAT_URL, {"message": message, **extra}, format="json", HTTP_AUTHORIZATION=f"Token {token}"
     )
+
+
+PROPOSALS_URL = "/api/assistant/proposals/"
+
+
+def propose(client, token, tool, tool_input, message="Bitte ändern", reply="Das ist mein Vorschlag.", **extra):
+    """One chat turn in which the (scripted) model calls the write tool `tool`; returns (response, llm)."""
+    with assistant_llm(call_tool(tool, tool_input), say(reply)) as llm:
+        response = chat(client, token, message, **extra)
+    return response, llm
+
+
+def proposal_url(proposal_id, action=""):
+    return f"{PROPOSALS_URL}{proposal_id}/{action}"
+
+
+def decide(client, token, proposal_id, action):
+    """The user's reaction to a proposal: "accept" or "reject"."""
+    return client.post(proposal_url(proposal_id, f"{action}/"), format="json", HTTP_AUTHORIZATION=f"Token {token}")
+
+
+def revise(client, token, proposal_id, changes):
+    """The user's "Ändern": sends an edited version of the proposal."""
+    return client.put(proposal_url(proposal_id), changes, format="json", HTTP_AUTHORIZATION=f"Token {token}")

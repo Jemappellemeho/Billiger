@@ -1,12 +1,16 @@
 import logging
 
+from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from assistant import proposals
 from assistant.agent import run_assistant
+from assistant.changes import ProposalInvalid
 from assistant.llm import LLMError, LLMNotConfigured, llm_from_django_settings
+from assistant.models import Proposal
 from assistant.serializers import ChatRequestSerializer
 from assistant.tools import ToolContext, zip_code_resolver
 
@@ -21,7 +25,12 @@ class ChatView(APIView):
     voice message is just a transcript with `input: "voice"`.
 
     The location is only used by the tools that need prices (price query,
-    cart comparison); the client sends its current one with every turn.
+    cart comparison) and to show the "before" of a location change; the
+    client sends its current one with every turn.
+
+    `proposals` lists the changes the assistant suggested this turn. They are
+    only suggestions: each one waits for the user's decision on the proposal
+    endpoints below.
     """
 
     permission_classes = [IsAuthenticated]
@@ -50,5 +59,60 @@ class ChatView(APIView):
                 "user_message": {"role": "user", "content": data["message"], "input": data["input"]},
                 "reply": reply.text,
                 "actions": reply.actions,
+                "proposals": reply.proposals,
             }
         )
+
+
+class _ProposalEndpoint(APIView):
+    """The user's reaction to one of the assistant's proposals (only the owner's; others get 404).
+
+    PUT    /api/assistant/proposals/<id>/         "Ändern": the edited proposal (same shape as the
+                                                   proposed state) → the proposal with a fresh diff
+    POST   /api/assistant/proposals/<id>/accept/  "Übernehmen": applies it → {proposal, message, ...}
+    POST   /api/assistant/proposals/<id>/reject/  "Verwerfen": drops it → {proposal, message}
+
+    `accept` also returns what changed: the account's `shopping_list` for list and preference
+    changes, the new `location` (`{zip_code}`) for a location change — that lives in the client.
+    A proposal that was already decided, or whose list changed in the meantime, answers 409.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _proposal(self, request, pk):
+        return get_object_or_404(Proposal, pk=pk, user=request.user)
+
+
+class ProposalView(_ProposalEndpoint):
+    def put(self, request, pk):
+        proposal = self._proposal(request, pk)
+        try:
+            revised = proposals.revise(proposal, request.data)
+        except proposals.ProposalNotPending:
+            return _already_decided()
+        except ProposalInvalid as exc:
+            return Response({"detail": str(exc)}, status=400)
+        return Response({"proposal": proposals.serialize(revised)})
+
+
+class ProposalDecisionView(_ProposalEndpoint):
+    """`decision` is "accept" or "reject" (a function of `assistant.proposals`)."""
+
+    decision = None
+
+    def post(self, request, pk):
+        proposal = self._proposal(request, pk)
+        try:
+            decided, outcome = getattr(proposals, self.decision)(proposal)
+        except proposals.ProposalNotPending:
+            return _already_decided()
+        except proposals.ProposalStale:
+            return Response(
+                {"detail": "Die Daten haben sich seit dem Vorschlag geändert. Bitte lass dir einen neuen vorschlagen."},
+                status=409,
+            )
+        return Response({"proposal": proposals.serialize(decided), **outcome})
+
+
+def _already_decided():
+    return Response({"detail": "Über diesen Vorschlag wurde schon entschieden."}, status=409)
