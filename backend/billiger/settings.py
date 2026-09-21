@@ -175,6 +175,8 @@ REST_FRAMEWORK = {
         'auth': '10/min',
         # Every assistant turn is a paid LLM call (per account).
         'assistant': '30/min',
+        # Proposals an MCP client creates without a chat turn (per account, Ticket 19).
+        'proposals': '20/min',
     },
 }
 

@@ -1,6 +1,7 @@
 import logging
 
 from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import Throttled
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -74,13 +75,26 @@ class ProposalCollectionView(APIView):
     GET  /api/assistant/proposals/                     the caller's proposals still waiting for a decision
 
     Creating one changes nothing: it waits for the user on the decision endpoints below.
+
+    Creating is throttled per account (429) and an account holds at most `proposals.MAX_PENDING`
+    open proposals: a new one retires the oldest (`stale`). Listing is neither.
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "proposals"
+
+    def get_throttles(self):
+        # Only creating is throttled; the app reads the list far more often.
+        return super().get_throttles() if self.request.method == "POST" else []
+
+    def throttled(self, request, wait):
+        raise Throttled(wait, detail="Zu viele Vorschläge in kurzer Zeit. Bitte versuche es gleich noch einmal.")
 
     def get(self, request):
         pending = Proposal.objects.filter(user=request.user, status=Proposal.Status.PENDING)
-        pending = pending.order_by("-created_at", "-pk")
+        # `create` already keeps an account within the limit; the slice covers rows from before it existed.
+        pending = pending.order_by("-created_at", "-pk")[: proposals.MAX_PENDING]
         return Response({"proposals": [proposals.serialize(proposal) for proposal in pending]})
 
     def post(self, request):

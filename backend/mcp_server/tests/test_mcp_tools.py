@@ -279,6 +279,14 @@ class ProposeToolMappingTests(McpApiTestCase):
 
         self.assertEqual(result["structuredContent"]["proposal"]["kind"], "location")
 
+    def test_a_client_that_proposes_too_fast_gets_a_tool_error_with_the_german_reason(self):
+        results = [self.tool("propose_location_change", {"zip_code": "8010"}) for _ in range(21)]
+
+        self.assertFalse(any(result["isError"] for result in results[:20]))
+        self.assertTrue(results[20]["isError"])
+        self.assertIn("Zu viele Vorschläge", results[20]["content"][0]["text"])
+        self.assertEqual(Proposal.objects.count(), 20)
+
 
 class ScopeTests(McpApiTestCase):
     def test_a_read_only_token_cannot_propose(self):

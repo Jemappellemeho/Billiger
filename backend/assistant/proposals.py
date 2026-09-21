@@ -7,6 +7,9 @@
 
 `create` and `revise` never touch the account's data; `accept` refuses proposals that
 were already decided or whose base state has moved on since.
+
+An account holds at most `MAX_PENDING` open proposals (Ticket 19): whatever channel makes a new
+one, the oldest open ones beyond that go `stale`, so the list in the app can't grow without bound.
 """
 from django.db import transaction
 from django.utils import timezone
@@ -14,6 +17,8 @@ from django.utils import timezone
 from accounts import shopping_list
 from assistant.changes import CHANGES, ProposalInvalid
 from assistant.models import Proposal
+
+MAX_PENDING = 20
 
 REJECTED_MESSAGE = "Verworfen — keine Änderung vorgenommen."
 NOTHING_TO_CHANGE = "Der Vorschlag entspricht dem aktuellen Stand — es gibt nichts zu ändern."
@@ -39,9 +44,20 @@ def create(user, kind, data, current_zip_code):
     change = CHANGES[kind]
     proposed = change.parse(data, user)
     base = change.snapshot(user, current_zip_code)
-    return Proposal.objects.create(
-        user=user, kind=kind, base=base, proposed=proposed, diff=_diff_against(change, base, proposed)
-    )
+    diff = _diff_against(change, base, proposed)
+    with transaction.atomic():
+        proposal = Proposal.objects.create(user=user, kind=kind, base=base, proposed=proposed, diff=diff)
+        _retire_beyond_limit(user)
+    return proposal
+
+
+def _retire_beyond_limit(user):
+    """Marks the account's oldest open proposals `stale` once it holds more than `MAX_PENDING`."""
+    # Locked so a concurrent accept/reject can't decide one of them while it is being retired.
+    open_proposals = Proposal.objects.select_for_update().filter(user=user, status=Proposal.Status.PENDING)
+    overflow = list(open_proposals.order_by("-created_at", "-pk").values_list("pk", flat=True))[MAX_PENDING:]
+    if overflow:
+        Proposal.objects.filter(pk__in=overflow).update(status=Proposal.Status.STALE, decided_at=timezone.now())
 
 
 def revise(proposal, data):

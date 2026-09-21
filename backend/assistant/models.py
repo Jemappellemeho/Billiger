@@ -21,7 +21,9 @@ class Proposal(models.Model):
         PENDING = "pending"
         ACCEPTED = "accepted"
         REJECTED = "rejected"
-        STALE = "stale"  # the state it was made for changed before the user decided
+        # No longer decidable: the state it was made for changed first, or newer proposals pushed it
+        # out of the account's `MAX_PENDING` open ones.
+        STALE = "stale"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="assistant_proposals"

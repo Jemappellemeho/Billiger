@@ -1,7 +1,11 @@
+from unittest.mock import patch
+
+from rest_framework.authtoken.models import Token
+
 from accounts.tests.base import AccountsAPITestCase
 from accounts.tests.helpers import LIST_URL, auth, item, shopping_list
 from assistant.models import Proposal
-from assistant.tests.helpers import PROPOSALS_URL, decide
+from assistant.tests.helpers import PROPOSALS_URL, assistant_llm, chat, decide, propose, say
 from streaks.tests.helpers import sign_up
 
 
@@ -71,6 +75,127 @@ class CreateProposalTests(AccountsAPITestCase):
     def test_it_needs_an_account(self):
         response = self.client.post(PROPOSALS_URL, {"kind": "location", "zip_code": "8010"}, format="json")
         self.assertEqual(response.status_code, 401)
+
+
+class ProposalThrottleTests(AccountsAPITestCase):
+    """Creating proposals is throttled per account (Ticket 19), so a runaway client can't flood the app."""
+
+    def location_proposal(self, token, zip_code="8010"):
+        return create(self.client, token, {"kind": "location", "zip_code": zip_code})
+
+    def test_creating_proposals_is_rate_limited_with_a_german_message(self):
+        token = sign_up(self.client)
+
+        statuses = [self.location_proposal(token).status_code for _ in range(21)]
+        blocked = self.location_proposal(token)
+
+        self.assertEqual(statuses[:20], [201] * 20)
+        self.assertEqual(statuses[20], 429)
+        self.assertIn("Zu viele Vorschläge", blocked.json()["detail"])
+
+    def test_the_limit_is_per_account(self):
+        busy, other = sign_up(self.client), sign_up(self.client, "ben@example.com")
+        for _ in range(21):
+            self.location_proposal(busy)
+
+        self.assertEqual(self.location_proposal(busy).status_code, 429)
+        self.assertEqual(self.location_proposal(other).status_code, 201)
+
+    def test_listing_and_deciding_are_not_throttled_by_it(self):
+        token = sign_up(self.client)
+        ids = [self.location_proposal(token).json()["proposal"]["id"] for _ in range(20)]
+        self.assertEqual(self.location_proposal(token).status_code, 429)
+
+        self.assertEqual(self.client.get(PROPOSALS_URL, **auth(token)).status_code, 200)
+        self.assertEqual(decide(self.client, token, ids[0], "reject").status_code, 200)
+
+    def test_the_limit_is_separate_from_the_chat_limit(self):
+        token = sign_up(self.client)
+        for _ in range(21):
+            self.location_proposal(token)
+
+        with assistant_llm(say("Hi")):
+            self.assertEqual(chat(self.client, token).status_code, 200)
+
+
+class PendingProposalLimitTests(AccountsAPITestCase):
+    """An account holds at most `MAX_PENDING` open proposals: a new one retires the oldest (Ticket 19)."""
+
+    LIMIT = 3
+
+    def setUp(self):
+        super().setUp()
+        patcher = patch("assistant.proposals.MAX_PENDING", self.LIMIT)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.token = sign_up(self.client)
+
+    def open_ids(self, token):
+        response = self.client.get(PROPOSALS_URL, **auth(token))
+        return [proposal["id"] for proposal in response.json()["proposals"]]
+
+    def location_proposals(self, count, token=None):
+        return [
+            create(self.client, token or self.token, {"kind": "location", "zip_code": f"80{n:02d}"}).json()["proposal"]["id"]
+            for n in range(count)
+        ]
+
+    def test_up_to_the_limit_nothing_is_retired(self):
+        ids = self.location_proposals(self.LIMIT)
+
+        self.assertEqual(self.open_ids(self.token), ids[::-1])
+        self.assertFalse(Proposal.objects.filter(status=Proposal.Status.STALE).exists())
+
+    def test_one_more_retires_the_oldest_and_the_list_keeps_the_newest(self):
+        ids = self.location_proposals(self.LIMIT + 2)
+
+        self.assertEqual(self.open_ids(self.token), ids[2:][::-1])
+        retired = Proposal.objects.filter(pk__in=ids[:2])
+        self.assertEqual({proposal.status for proposal in retired}, {Proposal.Status.STALE})
+        self.assertTrue(all(proposal.decided_at for proposal in retired))
+
+    def test_a_retired_proposal_can_no_longer_be_decided(self):
+        oldest, *_ = self.location_proposals(self.LIMIT + 1)
+
+        self.assertEqual(decide(self.client, self.token, oldest, "accept").status_code, 409)
+        self.assertEqual(decide(self.client, self.token, oldest, "reject").status_code, 409)
+
+    def test_decided_proposals_do_not_count_toward_the_limit(self):
+        ids = self.location_proposals(self.LIMIT)
+        decide(self.client, self.token, ids[0], "reject")
+
+        newest = self.location_proposals(1)
+
+        self.assertEqual(self.open_ids(self.token), newest + ids[1:][::-1])
+        self.assertEqual(Proposal.objects.get(pk=ids[1]).status, Proposal.Status.PENDING)
+
+    def test_it_only_retires_the_accounts_own_proposals(self):
+        other = sign_up(self.client, "ben@example.com")
+        theirs = self.location_proposals(self.LIMIT, token=other)
+
+        self.location_proposals(self.LIMIT + 2)
+
+        self.assertEqual(self.open_ids(other), theirs[::-1])
+
+    def test_the_list_shows_at_most_the_limit_even_for_rows_older_than_the_cap(self):
+        user = Token.objects.get(key=self.token).user
+        ids = [
+            Proposal.objects.create(user=user, kind="location", base=None, proposed={}, diff={}).pk
+            for _ in range(self.LIMIT + 2)
+        ]
+
+        self.assertEqual(self.open_ids(self.token), ids[2:][::-1])
+
+    def test_proposals_from_a_chat_turn_count_too(self):
+        chat_proposals = []
+        for n in range(self.LIMIT):
+            response, _ = propose(self.client, self.token, "propose_location_change", {"zip_code": f"80{n:02d}"})
+            chat_proposals.append(response.json()["proposals"][0]["id"])
+
+        self.location_proposals(1)
+
+        self.assertNotIn(chat_proposals[0], self.open_ids(self.token))
+        self.assertEqual(len(self.open_ids(self.token)), self.LIMIT)
 
 
 class ListProposalsTests(AccountsAPITestCase):
