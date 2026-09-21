@@ -1,10 +1,11 @@
 from django.urls import path
 
 from assistant import proposals
-from assistant.views import ChatView, ProposalDecisionView, ProposalView
+from assistant.views import ChatView, ProposalCollectionView, ProposalDecisionView, ProposalView
 
 urlpatterns = [
     path("assistant/chat/", ChatView.as_view(), name="assistant-chat"),
+    path("assistant/proposals/", ProposalCollectionView.as_view(), name="assistant-proposal-collection"),
     path("assistant/proposals/<int:pk>/", ProposalView.as_view(), name="assistant-proposal"),
     path(
         "assistant/proposals/<int:pk>/accept/",

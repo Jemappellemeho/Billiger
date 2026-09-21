@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
+    'mcp_server',  # before oauth2_provider: overrides its consent-screen template
+    'oauth2_provider',
     'search',
     'accounts',
     'streaks',
@@ -188,3 +190,48 @@ GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 ASSISTANT_MODEL = os.environ.get('ASSISTANT_MODEL', 'claude-opus-5')
 ASSISTANT_LLM_FALLBACKS = os.environ.get('ASSISTANT_LLM_FALLBACKS', '1') == '1'
+
+
+# MCP access for external LLM clients (Ticket 16): Billiger is an OAuth 2.1 authorization server
+# and the MCP endpoint (/mcp) its resource server. Every access token must be issued for
+# MCP_RESOURCE_URL (RFC 8707); set it to the public URL users enter in Claude/ChatGPT.
+MCP_RESOURCE_URL = os.environ.get('MCP_RESOURCE_URL', 'http://localhost:8000/mcp')
+
+# One pre-registered OAuth client per platform, no dynamic registration. Claude's redirect URI is
+# fixed; ChatGPT shows its own when the connector is created — the ChatGPT client only exists
+# once it is set here.
+MCP_CLAUDE_REDIRECT_URI = 'https://claude.ai/api/mcp/auth_callback'
+MCP_CHATGPT_REDIRECT_URI = os.environ.get('MCP_CHATGPT_REDIRECT_URI', '')
+
+# Browser origins allowed to call /mcp (the MCP spec's DNS-rebinding guard); calls without an
+# Origin header (server-to-server) are not affected.
+MCP_ALLOWED_ORIGINS = ['https://claude.ai', 'https://chatgpt.com', 'https://chat.openai.com']
+
+# `issue_mcp_dev_token` (internal testing, no end-user flow) only runs with this set: an explicit
+# opt-in, since DEBUG alone is no signal here.
+MCP_ALLOW_DEV_TOKENS = os.environ.get('MCP_ALLOW_DEV_TOKENS', '') == '1'
+
+# The consent screen needs a signed-in Django session, separate from the API's token auth.
+LOGIN_URL = '/accounts/login/'
+
+OAUTH2_PROVIDER = {
+    'SCOPES': {
+        'billiger:read': 'Einkaufsliste, Preise, Warenkorb-Vergleich und Ersparnis ansehen',
+        'billiger:write': 'Änderungen vorschlagen (übernommen wird erst, wenn du es in Billiger bestätigst)',
+    },
+    # Least privilege when a client asks for no scope.
+    'DEFAULT_SCOPES': ['billiger:read'],
+    'PKCE_REQUIRED': True,
+    'COMPLIANT_BCP_RFC9700_PKCE_METHOD': True,  # S256 only, no "plain"
+    'COMPLIANT_BCP_RFC9700_IMPLICIT_GRANT': True,  # authorization code only
+    'COMPLIANT_BCP_RFC9700_PASSWORD_GRANT': True,
+    'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,
+    'REFRESH_TOKEN_EXPIRE_SECONDS': 30 * 24 * 3600,
+    'ROTATE_REFRESH_TOKEN': True,
+    'ALLOWED_REDIRECT_URI_SCHEMES': ['https'],
+    # RFC 9728: the resource identifier clients validate the metadata against.
+    'OAUTH2_PROTECTED_RESOURCE_IDENTIFIER': MCP_RESOURCE_URL,
+    'OAUTH2_PROTECTED_RESOURCE_NAME': 'Billiger',
+    # RFC 8707: a token counts only if it was issued for the MCP endpoint.
+    'RESOURCE_SERVER_TOKEN_RESOURCE_VALIDATOR': 'mcp_server.audience.validate_mcp_audience',
+}

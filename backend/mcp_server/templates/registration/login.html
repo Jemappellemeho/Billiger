@@ -1,0 +1,21 @@
+{% extends "oauth2_provider/base.html" %}
+{% block title %}Bei Billiger anmelden{% endblock title %}
+{% block content %}
+    <div class="block-center">
+        <form method="post">
+            {% csrf_token %}
+            <h3 class="block-center-heading">Bei Billiger anmelden</h3>
+            {{ form.non_field_errors }}
+            <p>
+                <label for="{{ form.username.id_for_label }}">E-Mail</label><br>
+                {{ form.username }}{{ form.username.errors }}
+            </p>
+            <p>
+                <label for="{{ form.password.id_for_label }}">Passwort</label><br>
+                {{ form.password }}{{ form.password.errors }}
+            </p>
+            <input type="hidden" name="next" value="{{ next }}">
+            <input type="submit" class="btn btn-large btn-primary" value="Anmelden">
+        </form>
+    </div>
+{% endblock content %}
