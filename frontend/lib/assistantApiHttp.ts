@@ -27,7 +27,7 @@ async function failure(response: Response): Promise<AssistantError> {
 
 async function send<T>(
   path: string,
-  { method, token, body }: { method: "POST" | "PUT"; token: string; body?: unknown }
+  { method, token, body }: { method: "GET" | "POST" | "PUT"; token: string; body?: unknown }
 ): Promise<T> {
   const response = await fetch(`${API_BASE_URL}/api/assistant/${path}`, {
     method,
@@ -57,6 +57,11 @@ export const httpAssistantApi: AssistantApi = {
 
     const answer = await send<ChatAnswer>("chat/", { method: "POST", token, body });
     return { reply: answer.reply, actions: answer.actions, proposals: answer.proposals ?? [] };
+  },
+
+  async openProposals(token) {
+    const response = await send<{ proposals: Proposal[] }>("proposals/", { method: "GET", token });
+    return response.proposals;
   },
 
   async decide(token, proposalId, decision): Promise<ProposalOutcome> {

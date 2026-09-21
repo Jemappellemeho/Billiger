@@ -25,11 +25,13 @@ ZIP_CODE_PROPERTY = {
 }
 
 # Not `assistant.tools.PROPOSAL_NEXT_STEP`: there the user sees the diff in the chat, here the client
-# has to show it and send the user to Billiger to decide.
+# has to show it and send the user to Billiger to decide. The app lists open proposals in the assistant
+# panel (the 💬 button, with a badge for the count) without the user having to write anything first.
 PROPOSAL_NEXT_STEP = (
     "Der Vorschlag ist noch NICHT übernommen. Zeige dem Nutzer den vollständigen Diff (proposal.diff) "
-    "und sag ihm, dass die Änderung erst gilt, wenn er sie in Billiger übernimmt (oder ändert oder "
-    "verwirft). Behaupte nie, etwas sei schon geändert."
+    "und sag ihm, dass die Änderung erst gilt, wenn er sie in der Billiger-App übernimmt (oder ändert oder "
+    "verwirft): Dort zeigt der Assistent-Button (💬) die offenen Vorschläge an; er muss dafür nichts "
+    "schreiben. Behaupte nie, etwas sei schon geändert."
 )
 
 

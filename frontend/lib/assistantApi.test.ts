@@ -154,6 +154,32 @@ describe("assistant proposal decisions", () => {
     expect(revised.status).toBe("pending");
   });
 
+  test("loads the account's open proposals, including ones an external client made without a 'before'", async () => {
+    const location = {
+      id: 9,
+      kind: "location",
+      status: "pending",
+      diff: { before: null, after: { zip_code: "8010" } },
+      proposed: { zip_code: "8010" },
+    };
+    const fetchMock = respondWith(200, { proposals: [location, { ...proposal, status: "pending" }] });
+
+    const open = await httpAssistantApi.openProposals("t1");
+
+    const sent = lastRequest(fetchMock);
+    expect(sent.url).toMatch(/\/api\/assistant\/proposals\/$/);
+    expect(sent.init.method).toBe("GET");
+    expect(sent.init.headers).toMatchObject({ Authorization: "Token t1" });
+    expect(sent.init.body).toBeUndefined();
+    expect(open).toEqual([location, { ...proposal, status: "pending" }]);
+  });
+
+  test("loading the open proposals explains a missing sign-in like the chat does", async () => {
+    respondWith(401, { detail: "Invalid token." });
+
+    await expect(httpAssistantApi.openProposals("t1")).rejects.toThrow(/anmelden/);
+  });
+
   test("a conflict carries its status so the app can close the proposal", async () => {
     respondWith(409, { detail: "Über diesen Vorschlag wurde schon entschieden." });
 

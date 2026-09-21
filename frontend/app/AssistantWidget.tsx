@@ -4,7 +4,7 @@ import { Fragment, FormEvent, KeyboardEvent, useEffect, useRef, useState, useSyn
 import { useAssistant } from "@/hooks/useAssistant";
 import { useShoppingList } from "@/hooks/useShoppingList";
 import type { SearchLocation } from "@/lib/api";
-import { MAX_MESSAGE_LENGTH } from "@/lib/assistantChat";
+import { ChatProposal, MAX_MESSAGE_LENGTH } from "@/lib/assistantChat";
 import { isSpeechInputSupported, startSpeechInput } from "@/lib/speech";
 import { ProposalCard } from "./ProposalCard";
 import styles from "./AssistantWidget.module.css";
@@ -36,7 +36,7 @@ export function AssistantWidget({
   /** Called when the user accepts a location change the assistant proposed. */
   onLocationChange: (zipCode: string) => void;
 }) {
-  const { messages, pending, send, decide, revise, reset } = useAssistant();
+  const { messages, pending, inbox, send, loadOpenProposals, decide, revise, reset } = useAssistant();
   const { items: listItems } = useShoppingList();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -54,6 +54,22 @@ export function AssistantWidget({
     microphone.current?.cancel();
     reset();
   }, [token, reset]);
+
+  // Proposals an external assistant (MCP) made wait for the user here: look for them when the app
+  // starts or the account changes, whenever the panel opens and when the user comes back to the tab.
+  useEffect(() => {
+    if (!token) return;
+    void loadOpenProposals(token);
+    const refresh = () => {
+      if (document.visibilityState === "visible") void loadOpenProposals(token);
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [token, open, loadOpenProposals]);
 
   useEffect(() => {
     if (open) input.current?.focus();
@@ -105,6 +121,19 @@ export function AssistantWidget({
     }
   }
 
+  // The same card whether the proposal came up in this conversation or was made elsewhere.
+  function proposalCard(entry: ChatProposal, accountToken: string) {
+    return (
+      <ProposalCard
+        key={entry.proposal.id}
+        entry={entry}
+        listItems={listItems}
+        onDecide={(decision) => void decide(entry.proposal.id, decision, { token: accountToken, onLocationChange })}
+        onRevise={(changes) => revise(entry.proposal.id, changes, { token: accountToken })}
+      />
+    );
+  }
+
   function handleKeyDown(event: KeyboardEvent) {
     if (event.key === "Escape") setOpen(false);
   }
@@ -115,9 +144,14 @@ export function AssistantWidget({
         type="button"
         className={styles.launcher}
         onClick={() => setOpen(true)}
-        aria-label="Assistent öffnen"
+        aria-label={inbox.length > 0 ? `Assistent öffnen, ${inbox.length} offene Vorschläge` : "Assistent öffnen"}
       >
         <span aria-hidden="true">💬</span>
+        {inbox.length > 0 && (
+          <span className={styles.badge} aria-hidden="true">
+            {inbox.length}
+          </span>
+        )}
       </button>
     );
   }
@@ -149,6 +183,17 @@ export function AssistantWidget({
           </p>
         )}
 
+        {token && inbox.length > 0 && (
+          <section className={styles.inbox} aria-label="Offene Vorschläge">
+            <h3>Offene Vorschläge</h3>
+            <p className={styles.hint}>
+              Diese Änderungen wurden dir von einem anderen Assistenten vorgeschlagen. Sie gelten erst, wenn du sie
+              übernimmst.
+            </p>
+            {inbox.map((entry) => proposalCard(entry, token))}
+          </section>
+        )}
+
         {token && messages.length === 0 && (
           <div className={styles.suggestions}>
             <p className={styles.hint}>Frag mich zu Preisen, deiner Liste oder deiner Ersparnis:</p>
@@ -178,16 +223,7 @@ export function AssistantWidget({
               )}
               {message.content}
             </div>
-            {token &&
-              message.proposals.map((entry) => (
-                <ProposalCard
-                  key={entry.proposal.id}
-                  entry={entry}
-                  listItems={listItems}
-                  onDecide={(decision) => void decide(entry.proposal.id, decision, { token, onLocationChange })}
-                  onRevise={(changes) => revise(entry.proposal.id, changes, { token })}
-                />
-              ))}
+            {token && message.proposals.map((entry) => proposalCard(entry, token))}
           </Fragment>
         ))}
 

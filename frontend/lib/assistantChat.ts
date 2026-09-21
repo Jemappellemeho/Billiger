@@ -33,7 +33,15 @@ export type ChatMessage = {
   proposals: ChatProposal[];
 };
 
-export type AssistantChatState = { messages: ChatMessage[]; pending: boolean };
+export type AssistantChatState = {
+  messages: ChatMessage[];
+  pending: boolean;
+  /**
+   * Open proposals that no chat turn of this conversation made, e.g. ones an external
+   * assistant (MCP) created; loaded from the server, newest first.
+   */
+  inbox: ChatProposal[];
+};
 
 export type SendContext = {
   token: string;
@@ -55,7 +63,7 @@ const MAX_HISTORY_CONTENT_LENGTH = 4000;
 const UNREACHABLE = "Der Assistent ist gerade nicht erreichbar.";
 const CONFLICT = 409;
 
-const emptyState: AssistantChatState = { messages: [], pending: false };
+const emptyState: AssistantChatState = { messages: [], pending: false, inbox: [] };
 
 function buildHistory(messages: ChatMessage[]): ApiHistoryMessage[] {
   const history = messages
@@ -93,6 +101,9 @@ export function createAssistantChat({
   let nextId = 1;
   // Bumped by reset() so an answer that was in flight for the old conversation is dropped.
   let generation = 0;
+  // Bumped by every load and by every decision or edit, so a load answered after either is dropped
+  // instead of overwriting what the user just did with what the server knew before.
+  let inboxVersion = 0;
 
   function commit(next: AssistantChatState) {
     state = next;
@@ -100,7 +111,7 @@ export function createAssistantChat({
   }
 
   function addMessage(message: Omit<ChatMessage, "id">, pending: boolean) {
-    commit({ messages: [...state.messages, { ...message, id: nextId++ }], pending });
+    commit({ ...state, messages: [...state.messages, { ...message, id: nextId++ }], pending });
   }
 
   function findProposal(proposalId: number) {
@@ -108,25 +119,37 @@ export function createAssistantChat({
       const found = message.proposals.find((entry) => entry.proposal.id === proposalId);
       if (found) return found;
     }
-    return undefined;
+    return state.inbox.find((entry) => entry.proposal.id === proposalId);
   }
 
   function updateProposal(proposalId: number, change: (entry: ChatProposal) => ChatProposal) {
+    const apply = (entry: ChatProposal) => (entry.proposal.id === proposalId ? change(entry) : entry);
     commit({
       ...state,
-      messages: state.messages.map((message) => ({
-        ...message,
-        proposals: message.proposals.map((entry) =>
-          entry.proposal.id === proposalId ? change(entry) : entry
-        ),
-      })),
+      messages: state.messages.map((message) => ({ ...message, proposals: message.proposals.map(apply) })),
+      inbox: state.inbox.map(apply),
     });
   }
 
-  /** A failed decision or edit stays on the proposal; a 409 means it can't be applied any more. */
+  const isListed = (proposalId: number) => state.inbox.some((entry) => entry.proposal.id === proposalId);
+
+  function dropFromInbox(proposalId: number) {
+    inboxVersion++;
+    commit({ ...state, inbox: state.inbox.filter((entry) => entry.proposal.id !== proposalId) });
+  }
+
+  /**
+   * A failed decision or edit stays on the proposal; a 409 means it can't be applied any more.
+   * In the chat it is then marked as such; a listed one leaves the list, with the reason as a notice.
+   */
   function failProposal(proposalId: number, error: unknown) {
     const message = error instanceof AssistantError ? error.message : UNREACHABLE;
     const conflict = error instanceof AssistantError && error.status === CONFLICT;
+    if (conflict && isListed(proposalId)) {
+      dropFromInbox(proposalId);
+      addMessage({ role: "assistant", content: message, input: "text", failed: true, proposals: [] }, state.pending);
+      return;
+    }
     updateProposal(proposalId, (entry) => ({
       ...entry,
       busy: false,
@@ -158,7 +181,45 @@ export function createAssistantChat({
       reply = { role: "assistant", content, input: "text", failed: true, proposals: [] };
     }
 
-    if (conversation === generation) addMessage(reply, false);
+    if (conversation !== generation) return;
+    // A proposal this turn made may already have been loaded into the inbox: the chat takes it over.
+    const made = new Set(reply.proposals.map((entry) => entry.proposal.id));
+    if (state.inbox.some((entry) => made.has(entry.proposal.id))) {
+      inboxVersion++;
+      commit({ ...state, inbox: state.inbox.filter((entry) => !made.has(entry.proposal.id)) });
+    }
+    addMessage(reply, false);
+  }
+
+  /**
+   * Refreshes the inbox from the server: what the account still has open, minus what the chat already
+   * shows (matched by id). What was decided elsewhere drops out; a decision or edit that is on its way
+   * stays until it settles. Only the newest load counts, and none that a decision or edit overtook.
+   * This is a background refresh, so a failure leaves the list as it was.
+   */
+  async function loadOpenProposals(token: string) {
+    const conversation = generation;
+    const version = ++inboxVersion;
+    let open: Proposal[];
+    try {
+      open = await api.openProposals(token);
+    } catch {
+      return;
+    }
+    if (conversation !== generation || version !== inboxVersion) return;
+
+    const inChat = new Set(state.messages.flatMap((message) => message.proposals.map((entry) => entry.proposal.id)));
+    const known = new Map(state.inbox.map((entry) => [entry.proposal.id, entry]));
+    const listed = open
+      .filter((proposal) => !inChat.has(proposal.id))
+      .map((proposal) => {
+        const entry = known.get(proposal.id);
+        return entry?.busy ? entry : { ...(entry ?? { busy: false, error: null }), proposal };
+      });
+    const inFlight = state.inbox.filter(
+      (entry) => entry.busy && !listed.some((other) => other.proposal.id === entry.proposal.id)
+    );
+    commit({ ...state, inbox: [...listed, ...inFlight] });
   }
 
   /** "Übernehmen" / "Verwerfen": decides an open proposal and shows the confirmation. */
@@ -179,7 +240,12 @@ export function createAssistantChat({
 
       if (outcome.shoppingList) applyList(outcome.shoppingList);
       if (outcome.location) onLocationChange?.(outcome.location.zipCode);
-      updateProposal(proposalId, () => ({ proposal: outcome.proposal, busy: false, error: null }));
+      // A decided listed proposal leaves the list; its confirmation message is all that remains.
+      if (isListed(proposalId)) {
+        dropFromInbox(proposalId);
+      } else {
+        updateProposal(proposalId, () => ({ proposal: outcome.proposal, busy: false, error: null }));
+      }
       addMessage(
         { role: "assistant", content: outcome.message, input: "text", failed: false, proposals: [] },
         state.pending
@@ -199,6 +265,7 @@ export function createAssistantChat({
     try {
       const proposal = await api.revise(token, proposalId, changes);
       if (conversation !== generation) return false;
+      inboxVersion++;
       updateProposal(proposalId, () => ({ proposal, busy: false, error: null }));
       return true;
     } catch (error) {
@@ -209,6 +276,7 @@ export function createAssistantChat({
 
   function reset() {
     generation++;
+    inboxVersion++;
     commit(emptyState);
   }
 
@@ -220,6 +288,7 @@ export function createAssistantChat({
       return () => listeners.delete(listener);
     },
     send,
+    loadOpenProposals,
     decide,
     revise,
     reset,

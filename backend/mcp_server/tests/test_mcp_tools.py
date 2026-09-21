@@ -221,6 +221,8 @@ class ProposeToolMappingTests(McpApiTestCase):
         self.assertEqual([row["name"] for row in proposal["diff"]["added"]], ["Butter"])
         self.assertEqual(proposal["diff"]["changed"][0]["changes"]["quantity"], {"before": 2, "after": 3})
         self.assertIn("NICHT übernommen", result["structuredContent"]["next_step"])
+        # ... and it says where the user finds it.
+        self.assertIn("Billiger-App", result["structuredContent"]["next_step"])
         self.assertEqual(Proposal.objects.get(pk=proposal["id"]).user, self.user)
         # ... and nothing changed yet.
         self.assertEqual(self.stored_names(), ["Milch", "Nutella"])
