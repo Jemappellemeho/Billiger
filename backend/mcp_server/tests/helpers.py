@@ -18,6 +18,7 @@ from mcp_server.tools import READ_SCOPE, WRITE_SCOPE
 AUTHORIZE_URL = "/oauth/authorize/"
 TOKEN_URL = "/oauth/token/"
 MCP_URL = "/mcp/"
+LOGIN_URL = "/accounts/login/"
 PASSWORD = "correct-horse-battery"
 
 # "Not given, use the usual one": for parameters where None must stay a real value (no PKCE, no resource).
@@ -33,6 +34,10 @@ class McpTestCase(APITestCase):
         self.user = get_user_model().objects.create_user(
             username="anna@example.com", email="anna@example.com", password=PASSWORD
         )
+
+    def sign_in(self, email="anna@example.com", password=PASSWORD, **extra):
+        """A password sign-in on the consent login page."""
+        return self.client.post(LOGIN_URL, {"username": email, "password": password, **extra})
 
     @property
     def resource(self):

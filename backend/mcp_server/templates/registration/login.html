@@ -17,5 +17,33 @@
             <input type="hidden" name="next" value="{{ next }}">
             <input type="submit" class="btn btn-large btn-primary" value="Anmelden">
         </form>
+        {% if google_error %}<p class="errorlist">{{ google_error }}</p>{% endif %}
+        {% if google_client_id %}
+            <form method="post" id="google-sign-in">
+                {% csrf_token %}
+                <input type="hidden" name="google_credential">
+                <input type="hidden" name="next" value="{{ next }}">
+            </form>
+            <p>Oder:</p>
+            <div id="google-button" data-client-id="{{ google_client_id }}" aria-label="Mit Google anmelden"></div>
+            <script src="https://accounts.google.com/gsi/client" async></script>
+            <script>
+                window.onload = function () {
+                    if (!window.google) return;
+                    var button = document.getElementById("google-button");
+                    google.accounts.id.initialize({
+                        client_id: button.dataset.clientId,
+                        callback: function (response) {
+                            var form = document.getElementById("google-sign-in");
+                            form.elements.google_credential.value = response.credential;
+                            form.submit();
+                        },
+                    });
+                    google.accounts.id.renderButton(button, {
+                        theme: "outline", size: "large", text: "signin_with", locale: "de",
+                    });
+                };
+            </script>
+        {% endif %}
     </div>
 {% endblock content %}

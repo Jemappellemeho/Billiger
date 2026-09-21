@@ -180,7 +180,11 @@ REST_FRAMEWORK = {
 
 
 # Google sign-in (Ticket 12): the OAuth client ID whose ID tokens are accepted.
-# Empty disables Google login (the endpoint answers 503).
+# Empty disables Google login (the endpoint answers 503). Also the client ID of the "Mit Google
+# anmelden" button on the OAuth consent login page (Ticket 18); the frontend's
+# NEXT_PUBLIC_GOOGLE_CLIENT_ID must be the same ID, and the backend's own origin (which serves
+# /accounts/login/) must be listed under "Authorized JavaScript origins" of that client in the
+# Google console, next to the frontend's.
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
 
 

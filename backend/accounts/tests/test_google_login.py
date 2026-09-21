@@ -8,17 +8,13 @@ from accounts.tests.helpers import (
     GOOGLE_URL,
     LIST_URL,
     LOGIN_URL,
+    VERIFY_GOOGLE_TOKEN as VERIFY,
     auth,
+    google_claims,
     item,
     register,
     shopping_list,
 )
-
-VERIFY = "accounts.google.id_token.verify_oauth2_token"
-
-
-def google_claims(email="anna@example.com", email_verified=True):
-    return {"email": email, "email_verified": email_verified, "sub": "1234567890"}
 
 
 @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
