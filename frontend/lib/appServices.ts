@@ -19,4 +19,8 @@ export const accountService = createAccountService({
 });
 
 /** The built-in assistant's conversation, shared by the floating button and its panel. */
-export const assistantChat = createAssistantChat({ api: httpAssistantApi });
+export const assistantChat = createAssistantChat({
+  api: httpAssistantApi,
+  // An accepted list or preference change comes from the server, so it is shown, not pushed back.
+  applyList: (list) => shoppingListStore.replace(list),
+});

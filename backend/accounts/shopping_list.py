@@ -15,9 +15,25 @@ def empty_list():
     }
 
 
+def item_id(name, brand):
+    """A row's identity, derived from brand + name like the frontend's `itemId` (guest and account agree)."""
+    brand = (brand or "").strip().lower()
+    name = name.strip().lower()
+    return f"{brand}|{name}" if brand else name
+
+
 def load(user):
     stored = ShoppingList.objects.filter(user=user).first()
     return stored.data if stored else empty_list()
+
+
+def lock(user):
+    """Holds the account's list row until the surrounding transaction ends (call inside `atomic`).
+
+    For read-check-write sequences (e.g. accepting a proposal) that a concurrent `save` must not
+    slip into. An account without a stored list has no row to lock and nothing to lose.
+    """
+    ShoppingList.objects.select_for_update().filter(user=user).first()
 
 
 def save(user, data):

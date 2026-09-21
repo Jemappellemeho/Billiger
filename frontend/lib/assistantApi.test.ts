@@ -10,7 +10,7 @@ function respondWith(status: number, body?: unknown) {
 
 function lastRequest(fetchMock: ReturnType<typeof respondWith>) {
   const [url, init] = fetchMock.mock.calls.at(-1) as unknown as [string, RequestInit];
-  return { url, init, body: JSON.parse(init.body as string) };
+  return { url, init, body: init.body === undefined ? undefined : JSON.parse(init.body as string) };
 }
 
 const request = {
@@ -39,7 +39,7 @@ describe("assistant HTTP api", () => {
       history: [{ role: "user", content: "Hallo" }],
       zip_code: "1010",
     });
-    expect(answer).toEqual({ reply: "Bei Lidl.", actions: [] });
+    expect(answer).toEqual({ reply: "Bei Lidl.", actions: [], proposals: [] });
   });
 
   test("sends GPS coordinates when there is no PLZ", async () => {
@@ -65,7 +65,7 @@ describe("assistant HTTP api", () => {
     respondWith(502, { detail: "Der Assistent ist derzeit nicht erreichbar." });
 
     await expect(httpAssistantApi.chat(request)).rejects.toThrow(
-      new AssistantError("Der Assistent ist derzeit nicht erreichbar.")
+      new AssistantError("Der Assistent ist derzeit nicht erreichbar.", 502)
     );
   });
 
@@ -79,5 +79,88 @@ describe("assistant HTTP api", () => {
     respondWith(429, { detail: "Request was throttled." });
 
     await expect(httpAssistantApi.chat(request)).rejects.toThrow(/Moment/);
+  });
+
+  test("hands over the proposals the assistant made", async () => {
+    const proposal = { id: 7, kind: "location", status: "pending", diff: {}, proposed: {} };
+    respondWith(200, { reply: "Vorschlag", actions: [], proposals: [proposal] });
+
+    const answer = await httpAssistantApi.chat(request);
+
+    expect(answer.proposals).toEqual([proposal]);
+  });
+});
+
+describe("assistant proposal decisions", () => {
+  const proposal = { id: 7, kind: "shopping_list", status: "accepted", diff: {}, proposed: {} };
+
+  test("accepting posts to the proposal and converts the returned list", async () => {
+    const fetchMock = respondWith(200, {
+      proposal,
+      message: "✅ Einkaufsliste aktualisiert.",
+      shopping_list: {
+        items: [],
+        preferences: { preferred_brands: ["Ferrero"], excluded_ingredients: [], excluded_stores: ["Penny"] },
+      },
+    });
+
+    const outcome = await httpAssistantApi.decide("t1", 7, "accept");
+
+    const sent = lastRequest(fetchMock);
+    expect(sent.url).toMatch(/\/api\/assistant\/proposals\/7\/accept\/$/);
+    expect(sent.init.method).toBe("POST");
+    expect(sent.init.headers).toMatchObject({ Authorization: "Token t1" });
+    expect(outcome).toEqual({
+      proposal,
+      message: "✅ Einkaufsliste aktualisiert.",
+      shoppingList: {
+        items: [],
+        preferences: { preferredBrands: ["Ferrero"], excludedIngredients: [], excludedStores: ["Penny"] },
+      },
+      location: undefined,
+    });
+  });
+
+  test("accepting a location change returns the new PLZ", async () => {
+    respondWith(200, { proposal, message: "✅ Standort auf PLZ 8010 gesetzt.", location: { zip_code: "8010" } });
+
+    const outcome = await httpAssistantApi.decide("t1", 7, "accept");
+
+    expect(outcome.location).toEqual({ zipCode: "8010" });
+    expect(outcome.shoppingList).toBeUndefined();
+  });
+
+  test("rejecting posts to the reject endpoint", async () => {
+    const fetchMock = respondWith(200, {
+      proposal: { ...proposal, status: "rejected" },
+      message: "Verworfen — keine Änderung vorgenommen.",
+    });
+
+    const outcome = await httpAssistantApi.decide("t1", 7, "reject");
+
+    expect(lastRequest(fetchMock).url).toMatch(/\/proposals\/7\/reject\/$/);
+    expect(outcome.message).toBe("Verworfen — keine Änderung vorgenommen.");
+  });
+
+  test("editing puts the changed proposal and returns the fresh one", async () => {
+    const fetchMock = respondWith(200, { proposal: { ...proposal, status: "pending" } });
+
+    const revised = await httpAssistantApi.revise("t1", 7, { items: [] });
+
+    const sent = lastRequest(fetchMock);
+    expect(sent.url).toMatch(/\/proposals\/7\/$/);
+    expect(sent.init.method).toBe("PUT");
+    expect(sent.body).toEqual({ items: [] });
+    expect(revised.status).toBe("pending");
+  });
+
+  test("a conflict carries its status so the app can close the proposal", async () => {
+    respondWith(409, { detail: "Über diesen Vorschlag wurde schon entschieden." });
+
+    const error = await httpAssistantApi.decide("t1", 7, "accept").catch((e) => e);
+
+    expect(error).toBeInstanceOf(AssistantError);
+    expect(error.status).toBe(409);
+    expect(error.message).toBe("Über diesen Vorschlag wurde schon entschieden.");
   });
 });

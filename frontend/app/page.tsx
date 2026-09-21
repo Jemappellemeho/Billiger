@@ -235,7 +235,11 @@ export default function Home() {
         </section>
       )}
 
-      <AssistantWidget token={session?.token ?? null} location={resolveSearchLocation(location)} />
+      <AssistantWidget
+        token={session?.token ?? null}
+        location={resolveSearchLocation(location)}
+        onLocationChange={setManualZipCode}
+      />
     </main>
   );
 }

@@ -3,7 +3,7 @@ import { AccountApi, AccountError, AuthResult, UnauthorizedError } from "./accou
 import { ShoppingListState } from "./shoppingList";
 
 /** Wire format of the list (snake_case, like the rest of the API); see backend/accounts/serializers.py. */
-type WireList = {
+export type WireList = {
   items: ShoppingListState["items"];
   preferences: {
     preferred_brands: string[];
@@ -25,7 +25,7 @@ function toWire(state: ShoppingListState): WireList {
   };
 }
 
-function fromWire(wire: WireList): ShoppingListState {
+export function fromWire(wire: WireList): ShoppingListState {
   return {
     items: wire.items,
     preferences: {
