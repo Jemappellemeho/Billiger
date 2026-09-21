@@ -7,7 +7,7 @@ only accepting commits.
 """
 from accounts.tests.base import AccountsAPITestCase
 from accounts.tests.helpers import LIST_URL, auth, item, shopping_list
-from assistant.tests.helpers import PROPOSALS_URL, decide, propose, proposal_url, revise
+from assistant.tests.helpers import decide, propose, proposal_url, revise
 from streaks.tests.helpers import sign_up
 
 REJECTED_MESSAGE = "Verworfen — keine Änderung vorgenommen."
@@ -206,14 +206,6 @@ class ShoppingListProposalTests(ProposalTestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(self.current_list(), self.before)
-
-    def test_proposals_only_come_from_the_assistant_never_from_the_client(self):
-        response = self.client.post(
-            PROPOSALS_URL, {"kind": "shopping_list", "items": []}, format="json", **auth(self.token)
-        )
-
-        self.assertEqual(response.status_code, 404)
-
 
 class PreferencesProposalTests(ProposalTestCase):
     def setUp(self):

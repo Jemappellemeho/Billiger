@@ -1,0 +1,41 @@
+{% extends "oauth2_provider/base.html" %}
+
+{% block title %}Zugriff erlauben{% endblock title %}
+{% block content %}
+    <div class="block-center">
+        {% if not error %}
+            <form id="authorizationForm" method="post">
+                <h3 class="block-center-heading">{{ application.name }} den Zugriff auf dein Billiger-Konto erlauben?</h3>
+                {% csrf_token %}
+
+                {% for field in form %}
+                    {% if field.is_hidden %}
+                        {{ field }}
+                    {% endif %}
+                {% endfor %}
+
+                <p>{{ application.name }} darf:</p>
+                <ul>
+                    {% for scope in scopes_descriptions %}
+                        <li>{{ scope }}</li>
+                    {% endfor %}
+                </ul>
+                <p>Kontodaten wie E-Mail oder Passwort bleiben immer außerhalb ihrer Reichweite.</p>
+
+                {{ form.errors }}
+                {{ form.non_field_errors }}
+
+                <div class="control-group">
+                    <div class="controls">
+                        <input type="submit" class="btn btn-large" value="Abbrechen"/>
+                        <input type="submit" class="btn btn-large btn-primary" name="allow" value="Erlauben"/>
+                    </div>
+                </div>
+            </form>
+
+        {% else %}
+            <h2>Fehler: {{ error.error }}</h2>
+            <p>{{ error.description }}</p>
+        {% endif %}
+    </div>
+{% endblock content %}

@@ -6,7 +6,8 @@ class Proposal(models.Model):
     """A change the assistant suggested and the user has yet to decide on (Ticket 15).
 
     The model can only create these (a chat turn stores one with its full
-    diff); applying happens solely through the user's "accept". `base` is
+    diff, and so does an MCP client through the proposals endpoint, Ticket 16);
+    applying happens solely through the user's "accept". `base` is
     what the diff was computed against, so a proposal made for a state that
     has since moved on is refused instead of overwriting newer changes.
     """

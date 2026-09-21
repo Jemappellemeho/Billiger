@@ -23,4 +23,5 @@ urlpatterns = [
     path('api/', include('accounts.urls')),
     path('api/', include('streaks.urls')),
     path('api/', include('assistant.urls')),
+    path('', include('mcp_server.urls')),
 ]

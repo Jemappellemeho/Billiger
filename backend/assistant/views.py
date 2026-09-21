@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 
 from assistant import proposals
 from assistant.agent import run_assistant
-from assistant.changes import ProposalInvalid
+from assistant.changes import CHANGES, ProposalInvalid
 from assistant.llm import LLMError, LLMNotConfigured, llm_from_django_settings
 from assistant.models import Proposal
 from assistant.serializers import ChatRequestSerializer
@@ -62,6 +62,41 @@ class ChatView(APIView):
                 "proposals": reply.proposals,
             }
         )
+
+
+class ProposalCollectionView(APIView):
+    """The account's proposals as a collection (Ticket 16: how a channel without a chat turn proposes).
+
+    POST /api/assistant/proposals/ {kind, ...fields}  a new pending proposal, exactly what a chat turn's
+                                                       `propose_*` tool stores: kind is `shopping_list`,
+                                                       `preferences` or `location`, the fields are that
+                                                       tool's input → 201 {proposal} with the full diff
+    GET  /api/assistant/proposals/                     the caller's proposals still waiting for a decision
+
+    Creating one changes nothing: it waits for the user on the decision endpoints below.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        pending = Proposal.objects.filter(user=request.user, status=Proposal.Status.PENDING).order_by("-created_at", "-pk")
+        return Response({"proposals": [proposals.serialize(proposal) for proposal in pending]})
+
+    def post(self, request):
+        data = request.data
+        if not isinstance(data, dict):
+            return Response({"detail": "Die Eingabe muss ein Objekt sein."}, status=400)
+        kind = data.get("kind")
+        if kind not in CHANGES:
+            return Response({"detail": f"kind muss einer von diesen sein: {', '.join(CHANGES)}."}, status=400)
+
+        fields = {key: value for key, value in data.items() if key != "kind"}
+        try:
+            # The location a proposal is made from lives in the client; a channel without one has no "before".
+            proposal = proposals.create(request.user, kind, fields, current_zip_code=lambda: None)
+        except ProposalInvalid as exc:
+            return Response({"detail": str(exc)}, status=400)
+        return Response({"proposal": proposals.serialize(proposal)}, status=201)
 
 
 class _ProposalEndpoint(APIView):
