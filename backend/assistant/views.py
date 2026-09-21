@@ -96,14 +96,14 @@ class ProposalView(_ProposalEndpoint):
 
 
 class ProposalDecisionView(_ProposalEndpoint):
-    """`decision` is "accept" or "reject" (a function of `assistant.proposals`)."""
+    """`decision` is `proposals.accept` or `proposals.reject`, passed in through `as_view`."""
 
     decision = None
 
     def post(self, request, pk):
         proposal = self._proposal(request, pk)
         try:
-            decided, outcome = getattr(proposals, self.decision)(proposal)
+            decided, outcome = self.decision(proposal)
         except proposals.ProposalNotPending:
             return _already_decided()
         except proposals.ProposalStale:

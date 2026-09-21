@@ -8,6 +8,7 @@ import type {
   Proposal,
   ProposalChanges,
   ProposalDecision,
+  ProposalStatus,
 } from "@/lib/assistantApi";
 import { PREFERENCE_LIST_KEYS, ProposalDraft, startEditing, toChanges } from "@/lib/proposalEdit";
 import type { ShoppingListItem } from "@/lib/shoppingList";
@@ -25,11 +26,11 @@ const PREFERENCE_LABELS: Record<PreferenceListKey, string> = {
   excluded_stores: "Ausgeschlossene Läden",
 };
 
-const OUTCOME_LABELS = {
+const OUTCOME_LABELS: Record<Exclude<ProposalStatus, "pending">, string> = {
   accepted: "Übernommen",
   rejected: "Verworfen",
   stale: "Nicht mehr gültig",
-} as const;
+};
 
 const label = (item: ItemRef) => (item.brand ? `${item.brand} ${item.name}` : item.name);
 
@@ -232,6 +233,8 @@ export function ProposalCard({
   const { proposal, busy, error } = entry;
   const [draft, setDraft] = useState<ProposalDraft | null>(null);
   const open = proposal.status === "pending";
+  // A proposal that closed while being edited (e.g. the server calls it outdated) leaves the edit state.
+  const editing = open ? draft : null;
 
   async function submitEdit() {
     if (!draft) return;
@@ -241,8 +244,8 @@ export function ProposalCard({
   return (
     <section className={styles.card} aria-label={TITLES[proposal.kind]}>
       <h3>{TITLES[proposal.kind]}</h3>
-      {draft ? (
-        <ProposalEditor draft={draft} onChange={setDraft} listItems={listItems} />
+      {editing ? (
+        <ProposalEditor draft={editing} onChange={setDraft} listItems={listItems} />
       ) : (
         <ProposalDiff proposal={proposal} />
       )}
@@ -253,13 +256,13 @@ export function ProposalCard({
         </p>
       )}
 
-      {!open && (
+      {proposal.status !== "pending" && (
         <p className={styles.outcome} role="status">
-          {OUTCOME_LABELS[proposal.status as keyof typeof OUTCOME_LABELS]}
+          {OUTCOME_LABELS[proposal.status]}
         </p>
       )}
 
-      {open && !draft && (
+      {open && !editing && (
         <div className={styles.actions}>
           <button type="button" className={styles.primary} disabled={busy} onClick={() => onDecide("accept")}>
             Übernehmen
@@ -273,7 +276,7 @@ export function ProposalCard({
         </div>
       )}
 
-      {open && draft && (
+      {open && editing && (
         <div className={styles.actions}>
           <button type="button" className={styles.primary} disabled={busy} onClick={submitEdit}>
             Neuen Vorschlag anzeigen

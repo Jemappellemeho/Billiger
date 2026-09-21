@@ -132,16 +132,20 @@ class ShoppingListChange:
         return "✅ Einkaufsliste aktualisiert."
 
 
+def _preference_entries():
+    # Same limits as the stored preferences (accounts.serializers.PreferencesSerializer);
+    # blanks are dropped by `_unique`.
+    return serializers.ListField(
+        child=serializers.CharField(max_length=100, allow_blank=True),
+        max_length=MAX_PREFERENCE_ENTRIES,
+        required=False,
+    )
+
+
 class _PreferencesSerializer(serializers.Serializer):
-    preferred_brands = serializers.ListField(
-        child=serializers.CharField(max_length=100, allow_blank=True), max_length=MAX_PREFERENCE_ENTRIES, required=False
-    )
-    excluded_ingredients = serializers.ListField(
-        child=serializers.CharField(max_length=100, allow_blank=True), max_length=MAX_PREFERENCE_ENTRIES, required=False
-    )
-    excluded_stores = serializers.ListField(
-        child=serializers.CharField(max_length=100, allow_blank=True), max_length=MAX_PREFERENCE_ENTRIES, required=False
-    )
+    preferred_brands = _preference_entries()
+    excluded_ingredients = _preference_entries()
+    excluded_stores = _preference_entries()
     favorite_items = serializers.ListField(
         child=serializers.CharField(max_length=400), max_length=MAX_LIST_ITEMS, required=False
     )
@@ -249,6 +253,8 @@ class LocationChange:
         try:
             return {"zip_code": current_zip_code()}
         except Exception:
+            # Deliberately broad: an unknown or unresolvable location (the resolver's own error type
+            # lives in the tools layer) only means there is no "before" to show, never a failed proposal.
             return {"zip_code": None}
 
     def diff(self, base, proposed):

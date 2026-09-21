@@ -11,6 +11,7 @@ were already decided or whose base state has moved on since.
 from django.db import transaction
 from django.utils import timezone
 
+from accounts import shopping_list
 from assistant.changes import CHANGES, ProposalInvalid
 from assistant.models import Proposal
 
@@ -45,15 +46,18 @@ def create(user, kind, data, current_zip_code):
 
 def revise(proposal, data):
     """Replaces the proposed state with the user's edit; the diff is recomputed against the current state."""
-    _require_pending(proposal)
-    change = CHANGES[proposal.kind]
-    proposed = change.parse(data, proposal.user)
-    # A location's "before" is the client's, not the server's: keep the one the proposal was made with.
-    base = change.snapshot(proposal.user, lambda: proposal.base["zip_code"])
-    proposal.base, proposal.proposed = base, proposed
-    proposal.diff = _diff_against(change, base, proposed)
-    proposal.save(update_fields=["base", "proposed", "diff"])
-    return proposal
+    with transaction.atomic():
+        # Locked so a concurrent accept/reject can't decide the proposal while it is being rewritten.
+        proposal = Proposal.objects.select_for_update().get(pk=proposal.pk)
+        _require_pending(proposal)
+        change = CHANGES[proposal.kind]
+        proposed = change.parse(data, proposal.user)
+        # A location's "before" is the client's, not the server's: keep the one the proposal was made with.
+        base = change.snapshot(proposal.user, lambda: proposal.base["zip_code"])
+        proposal.base, proposal.proposed = base, proposed
+        proposal.diff = _diff_against(change, base, proposed)
+        proposal.save(update_fields=["base", "proposed", "diff"])
+        return proposal
 
 
 def accept(proposal):
@@ -62,6 +66,7 @@ def accept(proposal):
         proposal = Proposal.objects.select_for_update().get(pk=proposal.pk)
         _require_pending(proposal)
         change = CHANGES[proposal.kind]
+        shopping_list.lock(proposal.user)  # a concurrent list save can't slip between check and apply
         if not change.is_stale(proposal.user, proposal.base):
             result = change.apply(proposal.user, proposal.proposed)
             _decide(proposal, Proposal.Status.ACCEPTED)

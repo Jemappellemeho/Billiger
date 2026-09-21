@@ -27,6 +27,15 @@ def load(user):
     return stored.data if stored else empty_list()
 
 
+def lock(user):
+    """Holds the account's list row until the surrounding transaction ends (call inside `atomic`).
+
+    For read-check-write sequences (e.g. accepting a proposal) that a concurrent `save` must not
+    slip into. An account without a stored list has no row to lock and nothing to lose.
+    """
+    ShoppingList.objects.select_for_update().filter(user=user).first()
+
+
 def save(user, data):
     ShoppingList.objects.update_or_create(user=user, defaults={"data": data})
     return data
