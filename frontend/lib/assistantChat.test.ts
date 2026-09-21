@@ -19,6 +19,7 @@ function answer(reply: string, proposals: Proposal[] = []): ChatAnswer {
 function chatOnly(chat: AssistantApi["chat"], rest: Partial<AssistantApi> = {}): AssistantApi {
   return {
     chat,
+    openProposals: vi.fn(async () => []),
     decide: vi.fn(async () => {
       throw new Error("unexpected decide");
     }),
@@ -177,7 +178,7 @@ describe("assistant chat", () => {
     release(answer("Zu spät"));
     await sending;
 
-    expect(chat.getSnapshot()).toEqual({ messages: [], pending: false });
+    expect(chat.getSnapshot()).toEqual({ messages: [], pending: false, inbox: [] });
   });
 
   test("subscribers are told about every change", async () => {
@@ -390,6 +391,304 @@ describe("assistant proposals", () => {
     await deciding;
 
     expect(applyList).not.toHaveBeenCalled();
-    expect(chat.getSnapshot()).toEqual({ messages: [], pending: false });
+    expect(chat.getSnapshot()).toEqual({ messages: [], pending: false, inbox: [] });
+  });
+});
+
+/** Proposals an external client (MCP) made: not part of any chat turn. */
+const externalLocation: Proposal = {
+  id: 9,
+  kind: "location",
+  status: "pending",
+  diff: { before: null, after: { zip_code: "8010" } },
+  proposed: { zip_code: "8010" },
+};
+
+function inboxOf(chat: ReturnType<typeof createAssistantChat>) {
+  return chat.getSnapshot().inbox;
+}
+
+describe("open proposals from other channels", () => {
+  test("loading shows the account's open proposals without any chat turn, still unapplied", async () => {
+    const openProposals = vi.fn(async () => [externalLocation, listProposal]);
+    const applyList = vi.fn();
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals }), applyList });
+
+    await chat.loadOpenProposals("t1");
+
+    expect(openProposals).toHaveBeenCalledWith("t1");
+    expect(inboxOf(chat)).toEqual([
+      { proposal: externalLocation, busy: false, error: null },
+      { proposal: listProposal, busy: false, error: null },
+    ]);
+    expect(chat.getSnapshot().messages).toEqual([]);
+    expect(applyList).not.toHaveBeenCalled();
+  });
+
+  test("a proposal that the chat already shows is not listed a second time", async () => {
+    const { chat } = await chatWithProposals([listProposal], {
+      openProposals: vi.fn(async () => [externalLocation, listProposal]),
+    });
+
+    await chat.loadOpenProposals("t1");
+
+    expect(inboxOf(chat).map((entry) => entry.proposal.id)).toEqual([9]);
+    expect(proposalOf(chat, 7).proposal).toEqual(listProposal);
+  });
+
+  test("accepting a listed list change applies it, confirms in the chat and leaves the inbox", async () => {
+    const decide = vi.fn(async () =>
+      outcome(listProposal, "accepted", "✅ Einkaufsliste aktualisiert.", { shoppingList: newList })
+    );
+    const applyList = vi.fn();
+    const chat = createAssistantChat({
+      api: chatOnly(vi.fn(), { openProposals: async () => [externalLocation, listProposal], decide }),
+      applyList,
+    });
+    await chat.loadOpenProposals("t1");
+
+    await chat.decide(7, "accept", { token: "t1" });
+
+    expect(decide).toHaveBeenCalledWith("t1", 7, "accept");
+    expect(applyList).toHaveBeenCalledWith(newList);
+    expect(inboxOf(chat).map((entry) => entry.proposal.id)).toEqual([9]);
+    expect(contents(chat)).toEqual([["assistant", "✅ Einkaufsliste aktualisiert."]]);
+  });
+
+  test("accepting a listed location change (which has no 'before') hands the PLZ to the app", async () => {
+    const decide = vi.fn(async () =>
+      outcome(externalLocation, "accepted", "✅ Standort auf PLZ 8010 gesetzt.", { location: { zipCode: "8010" } })
+    );
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals: async () => [externalLocation], decide }) });
+    await chat.loadOpenProposals("t1");
+    const onLocationChange = vi.fn();
+
+    await chat.decide(9, "accept", { token: "t1", onLocationChange });
+
+    expect(onLocationChange).toHaveBeenCalledWith("8010");
+    expect(inboxOf(chat)).toEqual([]);
+    expect(contents(chat)).toEqual([["assistant", "✅ Standort auf PLZ 8010 gesetzt."]]);
+  });
+
+  test("rejecting a listed proposal applies nothing and says so", async () => {
+    const decide = vi.fn(async () => outcome(externalLocation, "rejected", "Verworfen — keine Änderung vorgenommen."));
+    const applyList = vi.fn();
+    const chat = createAssistantChat({
+      api: chatOnly(vi.fn(), { openProposals: async () => [externalLocation], decide }),
+      applyList,
+    });
+    await chat.loadOpenProposals("t1");
+    const onLocationChange = vi.fn();
+
+    await chat.decide(9, "reject", { token: "t1", onLocationChange });
+
+    expect(applyList).not.toHaveBeenCalled();
+    expect(onLocationChange).not.toHaveBeenCalled();
+    expect(inboxOf(chat)).toEqual([]);
+    expect(contents(chat)).toEqual([["assistant", "Verworfen — keine Änderung vorgenommen."]]);
+  });
+
+  test("a listed proposal the server calls outdated or already decided disappears, with the reason in the chat", async () => {
+    const decide = vi.fn(async () => {
+      throw new AssistantError("Über diesen Vorschlag wurde schon entschieden.", 409);
+    });
+    const applyList = vi.fn();
+    const chat = createAssistantChat({
+      api: chatOnly(vi.fn(), { openProposals: async () => [externalLocation, listProposal], decide }),
+      applyList,
+    });
+    await chat.loadOpenProposals("t1");
+
+    await chat.decide(7, "accept", { token: "t1" });
+
+    expect(inboxOf(chat).map((entry) => entry.proposal.id)).toEqual([9]);
+    expect(applyList).not.toHaveBeenCalled();
+    expect(chat.getSnapshot().messages).toMatchObject([
+      { role: "assistant", content: "Über diesen Vorschlag wurde schon entschieden.", failed: true },
+    ]);
+  });
+
+  test("a listed proposal that fails for another reason stays open with the reason, and can be retried", async () => {
+    const decide = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(outcome(externalLocation, "rejected", "Verworfen — keine Änderung vorgenommen."));
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals: async () => [externalLocation], decide }) });
+    await chat.loadOpenProposals("t1");
+
+    await chat.decide(9, "reject", { token: "t1" });
+
+    expect(inboxOf(chat)).toMatchObject([{ busy: false, proposal: { status: "pending" } }]);
+    expect(inboxOf(chat)[0].error).toMatch(/nicht erreichbar/);
+    expect(chat.getSnapshot().messages).toEqual([]);
+
+    await chat.decide(9, "reject", { token: "t1" });
+
+    expect(inboxOf(chat)).toEqual([]);
+  });
+
+  test("reloading drops proposals that were decided elsewhere, e.g. in another tab", async () => {
+    const openProposals = vi.fn().mockResolvedValueOnce([externalLocation, listProposal]).mockResolvedValueOnce([listProposal]);
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals }) });
+    await chat.loadOpenProposals("t1");
+
+    await chat.loadOpenProposals("t1");
+
+    expect(inboxOf(chat).map((entry) => entry.proposal.id)).toEqual([7]);
+  });
+
+  test("reloading shows what changed on the server but keeps a decision that is on its way", async () => {
+    const revised: Proposal = { ...externalLocation, proposed: { zip_code: "1010" }, diff: { before: null, after: { zip_code: "1010" } } };
+    const openProposals = vi.fn().mockResolvedValueOnce([externalLocation, listProposal]).mockResolvedValueOnce([revised]);
+    let release!: (value: ProposalOutcome) => void;
+    const decide = vi.fn(() => new Promise<ProposalOutcome>((resolve) => (release = resolve)));
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals, decide }) });
+    await chat.loadOpenProposals("t1");
+    const deciding = chat.decide(7, "accept", { token: "t1" });
+
+    await chat.loadOpenProposals("t1");
+
+    expect(inboxOf(chat)).toEqual([{ proposal: revised, busy: false, error: null }, expect.objectContaining({ busy: true })]);
+    release(outcome(listProposal, "accepted", "✅ Einkaufsliste aktualisiert."));
+    await deciding;
+    expect(inboxOf(chat).map((entry) => entry.proposal.id)).toEqual([9]);
+  });
+
+  test("a load that was answered before a decision but arrives after it does not bring the proposal back", async () => {
+    let release!: (value: Proposal[]) => void;
+    const openProposals = vi
+      .fn()
+      .mockResolvedValueOnce([externalLocation])
+      .mockImplementationOnce(() => new Promise<Proposal[]>((resolve) => (release = resolve)));
+    const decide = vi.fn(async () => outcome(externalLocation, "rejected", "Verworfen — keine Änderung vorgenommen."));
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals, decide }) });
+    await chat.loadOpenProposals("t1");
+
+    const loading = chat.loadOpenProposals("t1");
+    await chat.decide(9, "reject", { token: "t1" });
+    release([externalLocation]);
+    await loading;
+
+    expect(inboxOf(chat)).toEqual([]);
+  });
+
+  test("editing a listed proposal shows the fresh diff and keeps it in the list", async () => {
+    const edited: Proposal = { ...externalLocation, proposed: { zip_code: "1010" }, diff: { before: null, after: { zip_code: "1010" } } };
+    const revise = vi.fn(async () => edited);
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals: async () => [externalLocation], revise }) });
+    await chat.loadOpenProposals("t1");
+
+    const ok = await chat.revise(9, { zip_code: "1010" }, { token: "t1" });
+
+    expect(ok).toBe(true);
+    expect(revise).toHaveBeenCalledWith("t1", 9, { zip_code: "1010" });
+    expect(inboxOf(chat)).toEqual([{ proposal: edited, busy: false, error: null }]);
+    expect(chat.getSnapshot().messages).toEqual([]);
+  });
+
+  test("resetting empties the list, and a load that arrives afterwards is dropped", async () => {
+    let release!: (value: Proposal[]) => void;
+    const openProposals = vi.fn(() => new Promise<Proposal[]>((resolve) => (release = resolve)));
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals }) });
+
+    const loading = chat.loadOpenProposals("t1");
+    chat.reset();
+    release([externalLocation]);
+    await loading;
+
+    expect(inboxOf(chat)).toEqual([]);
+  });
+
+  test("a failed background load leaves the list as it was and does not throw", async () => {
+    const openProposals = vi.fn().mockResolvedValueOnce([externalLocation]).mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals }) });
+    await chat.loadOpenProposals("t1");
+
+    await expect(chat.loadOpenProposals("t1")).resolves.toBeUndefined();
+
+    expect(inboxOf(chat).map((entry) => entry.proposal.id)).toEqual([9]);
+    expect(chat.getSnapshot().messages).toEqual([]);
+  });
+
+  test("a slow load does not bring back a proposal that just turned out to be outdated", async () => {
+    let release!: (value: Proposal[]) => void;
+    const openProposals = vi
+      .fn()
+      .mockResolvedValueOnce([externalLocation])
+      .mockImplementationOnce(() => new Promise<Proposal[]>((resolve) => (release = resolve)));
+    const decide = vi.fn(async () => {
+      throw new AssistantError("Über diesen Vorschlag wurde schon entschieden.", 409);
+    });
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals, decide }) });
+    await chat.loadOpenProposals("t1");
+
+    const loading = chat.loadOpenProposals("t1");
+    await chat.decide(9, "accept", { token: "t1" });
+    release([externalLocation]);
+    await loading;
+
+    expect(inboxOf(chat)).toEqual([]);
+  });
+
+  test("a proposal that a chat turn makes while it is already listed moves into the chat instead of showing twice", async () => {
+    const decide = vi.fn(async () => outcome(externalLocation, "accepted", "✅ Standort auf PLZ 8010 gesetzt.", { location: { zipCode: "8010" } }));
+    const chat = createAssistantChat({
+      api: chatOnly(async () => answer("Mein Vorschlag.", [externalLocation]), { openProposals: async () => [externalLocation], decide }),
+    });
+    await chat.loadOpenProposals("t1");
+
+    await chat.send("Ändere etwas", context);
+
+    expect(inboxOf(chat)).toEqual([]);
+    expect(proposalOf(chat, 9).proposal).toEqual(externalLocation);
+    await chat.decide(9, "accept", { token: "t1" });
+    expect(proposalOf(chat, 9)).toMatchObject({ busy: false, proposal: { status: "accepted" } });
+  });
+
+  test("when two loads overlap, the answer to the older one does not overwrite the newer", async () => {
+    const releases: ((value: Proposal[]) => void)[] = [];
+    const openProposals = vi.fn(() => new Promise<Proposal[]>((resolve) => releases.push(resolve)));
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals }) });
+
+    const older = chat.loadOpenProposals("t1"); // e.g. the tab regained visibility ...
+    const newer = chat.loadOpenProposals("t1"); // ... and its window got focus
+    releases[1]([externalLocation]);
+    await newer;
+    releases[0]([]);
+    await older;
+
+    expect(inboxOf(chat).map((entry) => entry.proposal.id)).toEqual([9]);
+  });
+
+  test("a load requested before an edit but answered after it does not bring the old diff back", async () => {
+    const edited: Proposal = { ...externalLocation, proposed: { zip_code: "1010" }, diff: { before: null, after: { zip_code: "1010" } } };
+    let release!: (value: Proposal[]) => void;
+    const openProposals = vi
+      .fn()
+      .mockResolvedValueOnce([externalLocation])
+      .mockImplementationOnce(() => new Promise<Proposal[]>((resolve) => (release = resolve)));
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals, revise: async () => edited }) });
+    await chat.loadOpenProposals("t1");
+
+    const loading = chat.loadOpenProposals("t1");
+    await chat.revise(9, { zip_code: "1010" }, { token: "t1" });
+    release([externalLocation]);
+    await loading;
+
+    expect(inboxOf(chat)).toEqual([{ proposal: edited, busy: false, error: null }]);
+  });
+
+  test("an edit of a listed proposal that turns out to be outdated makes it disappear like a decision would", async () => {
+    const revise = vi.fn(async () => {
+      throw new AssistantError("Über diesen Vorschlag wurde schon entschieden.", 409);
+    });
+    const chat = createAssistantChat({ api: chatOnly(vi.fn(), { openProposals: async () => [externalLocation], revise }) });
+    await chat.loadOpenProposals("t1");
+
+    const ok = await chat.revise(9, { zip_code: "1010" }, { token: "t1" });
+
+    expect(ok).toBe(false);
+    expect(inboxOf(chat)).toEqual([]);
+    expect(chat.getSnapshot().messages).toMatchObject([{ failed: true, content: "Über diesen Vorschlag wurde schon entschieden." }]);
   });
 });

@@ -96,6 +96,8 @@ export class AssistantError extends Error {
 
 export interface AssistantApi {
   chat(request: ChatRequest): Promise<ChatAnswer>;
+  /** The account's proposals still waiting for a decision, newest first (also ones an external client made). */
+  openProposals(token: string): Promise<Proposal[]>;
   decide(token: string, proposalId: number, decision: ProposalDecision): Promise<ProposalOutcome>;
   revise(token: string, proposalId: number, changes: ProposalChanges): Promise<Proposal>;
 }

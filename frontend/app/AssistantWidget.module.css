@@ -26,6 +26,35 @@
   outline-offset: 2px;
 }
 
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: #d92d20;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.inbox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.inbox h3 {
+  font-size: 14px;
+}
+
 .panel {
   position: fixed;
   right: 16px;
