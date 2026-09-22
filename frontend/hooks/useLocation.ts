@@ -18,12 +18,17 @@ function geolocationAvailable() {
 }
 
 export function useLocation() {
-  const [location, setLocation] = useState<LocationState>(() =>
-    geolocationAvailable() ? { status: "detecting" } : { status: "unresolved" }
-  );
+  // Always starts as "detecting" on both server and client, since the
+  // server has no `navigator` to check availability with — deciding here
+  // per-render would desync SSR markup from the client's first render.
+  const [location, setLocation] = useState<LocationState>({ status: "detecting" });
 
   useEffect(() => {
     if (location.status !== "detecting") return;
+    if (!geolocationAvailable()) {
+      setLocation({ status: "unresolved" });
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocation({
